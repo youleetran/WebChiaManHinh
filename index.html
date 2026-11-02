@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Xe Mazda — Bản đồ + Video</title>
+
+<!-- Leaflet (bản đồ) — chạy local để không bị ad blocker chặn CDN -->
+<link rel="stylesheet" href="leaflet.css" />
+<script src="leaflet.js"></script>
+<script>window.L || document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>');</script>
+<!-- dash.js để phát video DASH không quảng cáo -->
+<script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
+
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --border: #2a313a;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #ff4d4d;
+    --accent-green: #2ea043;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* ---------- Bố cục chia đôi ---------- */
+  #app { display: flex; height: 100vh; width: 100vw; }
+
+  /* ===== TRÁI: BẢN ĐỒ ===== */
+  #map-pane { position: relative; flex: 1 1 50%; min-width: 0; border-right: 2px solid var(--border); }
+  #map { position: absolute; inset: 0; background: #1a1f26; }
+
+  #map-tools {
+    position: absolute; z-index: 1000; top: 10px; right: 10px;
+    max-width: calc(100% - 240px);
+    display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px;
+  }
+  .map-btn {
+    background: rgba(22,27,34,0.92); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; font-size: 18px; cursor: pointer;
+  }
+  #btn-gps.active, #btn-follow.active, #btn-sound.active { background: var(--accent-green); color: #fff; }
+
+  #gps-status {
+    position: absolute; z-index: 1000; left: 10px; bottom: 10px;
+    background: rgba(22,27,34,0.9); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 10px; font-size: 13px; color: var(--muted);
+    max-width: 70%;
+  }
+
+  /* Bảng tốc độ nổi trên bản đồ */
+  #speed-overlay {
+    position: absolute; z-index: 1000; top: 10px; left: 10px;
+    display: flex; gap: 10px;
+  }
+  .speed-card {
+    background: rgba(14,17,22,0.92); border: 1px solid var(--border);
+    border-radius: 12px; padding: 8px 12px; text-align: center; min-width: 92px;
+  }
+  .speed-card .label { font-size: 13px; color: var(--muted); letter-spacing: 1px; }
+  .speed-card .value { font-size: 42px; font-weight: 700; line-height: 1.1; }
+  .speed-card .unit  { font-size: 13px; color: var(--muted); }
+
+  /* Biển giới hạn tốc độ (hình tròn đỏ) */
+  #speed-limit-box .value {
+    display: inline-block; width: 74px; height: 74px; line-height: 74px;
+    border: 7px solid #e11d2e; border-radius: 50%;
+    background: #fff; color: #111; font-size: 34px; font-weight: 800;
+  }
+  #speed-limit-box.unknown .value { color: #999; font-size: 26px; }
+  #speed-limit-box.estimated .value { color: #777; border-color: #999; font-size: 28px; }
+
+  /* Tốc độ hiện tại */
+  #current-speed-box .value { color: #7ee787; }
+  #current-speed-box.over .value { color: #ff4d4d; }
+
+  /* Cảnh báo chạy quá tốc độ */
+  #warning {
+    position: absolute; z-index: 1001; top: 150px; left: 50%; white-space: nowrap;
+    transform: translateX(-50%);
+    background: var(--accent); color: #fff; font-weight: 800; font-size: 26px;
+    padding: 10px 22px; border-radius: 12px;
+    animation: blink 0.6s steps(2, start) infinite;
+  }
+  #warning.hidden { display: none; }
+  @keyframes blink { 50% { opacity: 0.35; } }
+
+  /* ===== PHẢI: NHẠC ===== */
+  #music-pane {
+    flex: 1 1 50%; min-width: 0;
+    display: flex; flex-direction: column; background: var(--panel);
+  }
+  #music-pane .head {
+    padding: 12px; border-bottom: 1px solid var(--border);
+    font-size: 20px; font-weight: 700;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .expand-btn {
+    flex: 0 0 auto; font-size: 16px; padding: 8px 12px;
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; cursor: pointer; font-weight: 600; white-space: nowrap;
+  }
+  #music-pane .head span { color: var(--accent); }
+
+  .search-bar { display: flex; gap: 8px; padding: 12px; }
+  #search-input {
+    flex: 1; font-size: 20px; padding: 12px 14px;
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px; outline: none;
+  }
+  #search-btn {
+    font-size: 20px; padding: 12px 18px; border: none; border-radius: 10px;
+    background: var(--accent); color: #fff; font-weight: 700; cursor: pointer;
+  }
+
+  #now-playing {
+    padding: 0 12px; display: none;
+  }
+  #now-playing.show { display: block; }
+  .np-card {
+    display: flex; gap: 12px; align-items: center;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 10px;
+  }
+  .np-card img { width: 74px; height: 74px; border-radius: 8px; object-fit: cover; background: #222; }
+  .np-info { flex: 1; min-width: 0; }
+  .np-info .t { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-info .a { font-size: 14px; color: var(--muted); }
+  #video { width: 100%; margin-top: 8px; border-radius: 10px; background: #000; max-height: 42vh; }
+
+  #results { flex: 1; overflow-y: auto; padding: 8px 12px 20px; }
+  .song {
+    display: flex; gap: 12px; align-items: center; padding: 10px;
+    border-radius: 10px; cursor: pointer; border: 1px solid transparent;
+  }
+  .song:hover, .song.playing { background: var(--bg); border-color: var(--accent); }
+  .song img { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; background: #222; flex: 0 0 56px; }
+  .song .meta { flex: 1; min-width: 0; }
+  .song .t { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song .a { font-size: 13px; color: var(--muted); }
+  .song .d { font-size: 13px; color: var(--muted); flex: 0 0 auto; }
+
+  .hint { color: var(--muted); text-align: center; padding: 30px 10px; font-size: 16px; }
+  .err { color: #ff9a9a; text-align: center; padding: 20px; font-size: 15px; }
+
+  .head-buttons { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  #btn-passenger.active { background: var(--accent-green); color: #fff; }
+
+  .fav {
+    flex: 0 0 auto; background: none; border: none; cursor: pointer;
+    color: #f5c518; font-size: 26px; line-height: 1; padding: 6px 8px;
+  }
+
+  #result-tabs { display: flex; gap: 6px; padding: 8px 12px 0; }
+  #result-tabs button {
+    flex: 1; font-size: 15px; padding: 8px; cursor: pointer;
+    background: var(--bg); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  #result-tabs button.active { color: var(--text); border-color: var(--accent); }
+
+  /* Xe đang chạy: ẩn hình và danh sách, chỉ còn tiếng + nút to */
+  #drive-panel { display: none; }
+  #app.driving #video,
+  #app.driving #music-pane .search-bar,
+  #app.driving #result-tabs,
+  #app.driving #results { display: none; }
+  #app.driving #drive-panel {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px; padding: 12px;
+  }
+  .drive-note { color: var(--muted); font-size: 18px; text-align: center; }
+  .drive-buttons { display: flex; gap: 14px; }
+  .drive-buttons button {
+    width: 92px; height: 92px; font-size: 38px; cursor: pointer;
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 16px;
+  }
+
+  /* Chế độ phóng to */
+  #app.focus-map #music-pane { display: none; }
+  #app.video-focus #music-pane .search-bar,
+  #app.video-focus #music-pane #results,
+  #app.video-focus #result-tabs,
+  #app.video-focus .np-card { display: none; }
+  #app.video-focus #now-playing.show { flex: 1; display: flex; flex-direction: column; padding: 8px; }
+  #app.video-focus #video { flex: 1; max-height: none; }
+
+  /* Dọc (điện thoại test): xếp chồng */
+  @media (max-width: 700px) {
+    #app { flex-direction: column; }
+    #map-pane { flex: 1 1 55%; border-right: none; border-bottom: 2px solid var(--border); }
+    #music-pane { flex: 1 1 45%; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ================= TRÁI: BẢN ĐỒ ================= -->
+  <section id="map-pane">
+    <div id="map"></div>
+
+    <div id="speed-overlay">
+      <div class="speed-card" id="speed-limit-box">
+        <div class="label" id="speed-limit-label">GIỚI HẠN</div>
+        <div class="value" id="speed-limit">--</div>
+        <div class="unit">km/h</div>
+      </div>
+      <div class="speed-card" id="current-speed-box">
+        <div class="label">TỐC ĐỘ</div>
+        <div class="value" id="current-speed">--</div>
+        <div class="unit">km/h</div>
+      </div>
+    </div>
+
+    <div id="warning" class="hidden">⚠️ CHẠY QUÁ TỐC ĐỘ</div>
+
+    <div id="map-tools">
+      <button class="map-btn" id="btn-gps" title="Lấy vị trí GPS">📍 GPS</button>
+      <button class="map-btn active" id="btn-follow" title="Bám theo vị trí">🎯 Bám theo</button>
+      <button class="map-btn" id="btn-sound" title="Bật / tắt tiếng cảnh báo">🔔</button>
+      <button class="map-btn" id="btn-expand-map" title="Phóng to bản đồ">⛶</button>
+    </div>
+    <div id="gps-status">Đang khởi động…</div>
+  </section>
+
+  <!-- ================= PHẢI: NHẠC ================= -->
+  <section id="music-pane">
+    <div class="head">
+      <div>🎬 Xem video <span>không quảng cáo</span></div>
+      <div class="head-buttons">
+        <button class="expand-btn" id="btn-passenger" title="Bật khi hành khách xem: không ẩn hình lúc xe chạy">👤 Hành khách: tắt</button>
+        <button class="expand-btn" id="btn-expand-music" title="Phóng to bên nhạc/video">⛶ Phóng to</button>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <input id="search-input" type="text" placeholder="Tìm video / bài hát…" />
+      <button id="search-btn">Tìm</button>
+    </div>
+
+    <div id="now-playing">
+      <div class="np-card">
+        <img id="np-thumb" alt="" />
+        <div class="np-info">
+          <div class="t" id="np-title">—</div>
+          <div class="a" id="np-artist">—</div>
+        </div>
+        <button class="fav" id="np-fav" title="Yêu thích">☆</button>
+      </div>
+      <video id="video" controls playsinline></video>
+    </div>
+
+    <div id="drive-panel">
+      <div class="drive-note">🔊 Hình được ẩn khi xe đang chạy</div>
+      <div class="drive-buttons">
+        <button id="btn-prev" title="Video trước">⏮</button>
+        <button id="btn-playpause" title="Phát / Tạm dừng">⏯</button>
+        <button id="btn-next" title="Video sau">⏭</button>
+      </div>
+    </div>
+
+    <div id="result-tabs">
+      <button data-tab="search" class="active">Kết quả</button>
+      <button data-tab="favorites">★ Yêu thích</button>
+      <button data-tab="history">Đã xem</button>
+    </div>
+
+    <div id="results"><div class="hint">Gõ tên video rồi bấm “Tìm”</div></div>
+  </section>
+
+</div>
+
+<script>
+/* ============================================================
+   CẤU HÌNH — sửa ở đây nếu cần
+   ============================================================ */
+// Các instance Invidious (frontend YouTube không quảng cáo).
+// Nếu cái đầu hỏng, tự thử cái sau. Khi mở trang sẽ tự lấy thêm từ INSTANCE_LIST_URL.
+const INVIDIOUS_INSTANCES = [
+  'https://yt.chocolatemoo53.com',
+  'https://inv.nadeko.net'
+];
+const INSTANCE_LIST_URL = 'https://api.invidious.io/instances.json';
+const ROAD_DATA_URL = 'data/roads/';
+const DEFAULT_CENTER = [16.05, 108.0]; // Việt Nam (khi chưa có GPS)
+
+// Số ước tính khi đường không có dữ liệu maxspeed. Chỉ để tham khảo, không kích hoạt cảnh báo.
+const ESTIMATED_LIMITS = {
+  motorway: 100, trunk: 80, primary: 60, secondary: 60, tertiary: 50,
+  unclassified: 50, residential: 50, living_street: 30
+};
+// ROAD_TILE_DEG và ROAD_TYPES phải giống TILE_DEG và ROAD_TYPES trong tools/build_roads.py
+const ROAD_TILE_DEG = 0.1;
+const ROAD_TYPES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary',
+                    'unclassified', 'residential', 'living_street'];
+const ROAD_TILE_EDGE_M = 1500; // còn cách ranh giới ô từng này thì tải trước ô bên cạnh
+const ROAD_TILES_IN_MEMORY = 9;
+const ROAD_MATCH_M = 35;      // đường xa hơn khoảng này thì không tính
+const LIMIT_STALE_MS = 30000;  // giữ giới hạn cũ tối đa bao lâu khi không khớp đường
+const VIDEO_START_TIMEOUT_MS = 25000; // quá thời gian này chưa có hình thì thử lại
+const VIDEO_TRIES_PER_SERVER = 3;     // mỗi máy chủ được thử tối đa bấy nhiêu lần cho một video
+const HIDE_VIDEO_KMH = 5;      // nhanh hơn mức này thì ẩn hình
+const SHOW_VIDEO_KMH = 3;      // chậm hơn mức này đủ 3 giây thì hiện lại
+
+/* ============================================================
+   BẢN ĐỒ
+   ============================================================ */
+let map = null;
+if (typeof L === 'undefined') {
+  document.getElementById('map').innerHTML =
+    '<div style="color:#ff9a9a;padding:20px;font-size:16px;">⚠️ Không tải được thư viện bản đồ. Kiểm tra mạng rồi tải lại trang (Ctrl+F5).</div>';
+} else {
+  map = L.map('map', { zoomControl: false }).setView(DEFAULT_CENTER, 6);
+  map.attributionControl.setPrefix(false).addAttribution('© OpenStreetMap');  // giấy phép dữ liệu yêu cầu ghi nguồn
+  L.control.zoom({ position: 'bottomright' }).addTo(map);  // góc trên trái đã có bảng tốc độ
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+  let tileErrors = 0;
+  osm.on('tileerror', function () {
+    tileErrors++;
+    if (tileErrors === 4) {
+      osm.remove();
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    }
+  });
+}
+
+let posMarker = null;       // chấm vị trí hiện tại (GPS)
+let manualMarker = null;    // vị trí đặt tay
+let follow = true;          // tự động bám theo GPS
+let speedLimit = null;      // giới hạn tốc độ đã biết chắc (số ước tính không tính)
+let lastBeep = 0;
+
+// Nút bám theo
+document.getElementById('btn-follow').addEventListener('click', function () {
+  follow = !follow;
+  this.classList.toggle('active', follow);
+});
+
+/* ---------- GPS ---------- */
+function setStatus(msg) { document.getElementById('gps-status').textContent = msg; }
+
+function startGPS() {
+  if (!('geolocation' in navigator)) {
+    setStatus('⚠️ Trình duyệt không hỗ trợ GPS — chạm vào bản đồ để đặt vị trí');
+    return;
+  }
+  setStatus('Đang tìm GPS… (cần mở trang qua HTTPS)');
+  navigator.geolocation.watchPosition(onPosition, onGPSError, {
+    enableHighAccuracy: true, maximumAge: 2000, timeout: 15000
+  });
+}
+
+// Khoảng cách (m) giữa hai điểm, đủ chính xác cho quãng ngắn
+function distanceM(lat1, lon1, lat2, lon2) {
+  const dy = (lat2 - lat1) * 111320;
+  const dx = (lon2 - lon1) * 111320 * Math.cos(lat1 * Math.PI / 180);
+  return Math.hypot(dx, dy);
+}
+function bearingDeg(lat1, lon1, lat2, lon2) {
+  const dy = lat2 - lat1;
+  const dx = (lon2 - lon1) * Math.cos(lat1 * Math.PI / 180);
+  return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+}
+
+// Máy không báo tốc độ / hướng thì tự tính từ hai vị trí liên tiếp
+let lastFix = null;
+let lastHeading = null;
+function readMotion(pos) {
+  const c = pos.coords;
+  let kmh = (c.speed != null) ? c.speed * 3.6 : null;
+  let heading = (c.heading != null && !isNaN(c.heading)) ? c.heading : null;
+  if (lastFix) {
+    const dt = (pos.timestamp - lastFix.time) / 1000;
+    const dist = distanceM(lastFix.lat, lastFix.lon, c.latitude, c.longitude);
+    if (kmh == null && dt >= 1 && c.accuracy <= 30) kmh = (dist < 5) ? 0 : dist / dt * 3.6;
+    if (heading == null && dist >= 10) heading = bearingDeg(lastFix.lat, lastFix.lon, c.latitude, c.longitude);
+  }
+  if (!lastFix || distanceM(lastFix.lat, lastFix.lon, c.latitude, c.longitude) >= 5 || pos.timestamp - lastFix.time > 5000) {
+    lastFix = { lat: c.latitude, lon: c.longitude, time: pos.timestamp };
+  }
+  if (heading != null) lastHeading = heading;
+  return { kmh, heading: lastHeading };
+}
+
+function onPosition(pos) {
+  if (!map) return;
+  const lat = pos.coords.latitude, lon = pos.coords.longitude;
+  const { kmh, heading } = readMotion(pos);
+
+  if (!posMarker) {
+    posMarker = L.circleMarker([lat, lon], {
+      radius: 9, color: '#fff', weight: 2, fillColor: '#2ea043', fillOpacity: 1
+    }).addTo(map);
+  } else {
+    posMarker.setLatLng([lat, lon]);
+  }
+  if (follow) map.setView([lat, lon], Math.max(map.getZoom(), 15));
+
+  setStatus('GPS: ' + lat.toFixed(5) + ', ' + lon.toFixed(5));
+  lookupSpeedLimit(lat, lon, heading);
+  renderCurrentSpeed(kmh);
+  updateDriveMode(kmh);
+}
+
+function onGPSError(err) {
+  setStatus('⚠️ Không lấy được GPS — chạm vào bản đồ để đặt vị trí');
+}
+
+document.getElementById('btn-gps').addEventListener('click', startGPS);
+
+/* ---------- Đặt vị trí tay (chạm vào bản đồ) ---------- */
+if (map) map.on('click', function (e) {
+  const { lat, lng } = e.latlng;
+  if (manualMarker) manualMarker.setLatLng([lat, lng]);
+  else manualMarker = L.circleMarker([lat, lng], {
+    radius: 8, color: '#fff', weight: 2, fillColor: '#ff4d4d', fillOpacity: 1
+  }).addTo(map);
+  setStatus('Vị trí đặt tay: ' + lat.toFixed(5) + ', ' + lng.toFixed(5));
+  lastLimitAt = 0;             // đặt tay là nhảy sang chỗ khác, không giữ số cũ
+  currentWayId = null;
+  lookupSpeedLimit(lat, lng, null);
+});
+
+/* ---------- Dữ liệu đường ----------
+   Đọc từ các file có sẵn trong ROAD_DATA_URL (tạo bằng tools/build_roads.py),
+   mỗi file là một ô lưới. Tìm đường ngay trong máy, không cần hỏi máy chủ. */
+const roadTiles = new Map();    // 'x_y' -> các đoạn đường của ô đó
+const tilesLoading = new Set();
+const tileRetryAt = new Map();  // tải lỗi thì chờ đến lúc này mới thử lại
+let lastPoint = null;
+
+// Ô chứa vị trí hiện tại, thêm ô bên cạnh nếu đã gần ranh giới
+function tilesNear(lat, lon) {
+  const dLat = ROAD_TILE_EDGE_M / 111320;
+  const dLon = dLat / Math.cos(lat * Math.PI / 180);
+  const keys = new Set();
+  for (const a of [-dLat, 0, dLat]) {
+    for (const b of [-dLon, 0, dLon]) {
+      keys.add(Math.floor((lon + b) / ROAD_TILE_DEG) + '_' + Math.floor((lat + a) / ROAD_TILE_DEG));
+    }
+  }
+  return Array.from(keys);
+}
+
+function decodeWay(record, index, key) {
+  const [name, type, oneway, limitForward, limitBackward, coords] = record;
+  const points = [];
+  let lat = 0, lon = 0;
+  for (let i = 0; i + 1 < coords.length; i += 2) {
+    lat += coords[i];
+    lon += coords[i + 1];
+    points.push([lat / 1e5, lon / 1e5]);
+  }
+  return {
+    id: key + ':' + index,
+    name,
+    oneway: oneway > 0,
+    reversed: oneway === 2,
+    limitForward,
+    limitBackward,
+    estimate: ESTIMATED_LIMITS[ROAD_TYPES[type]] || null,
+    points
+  };
+}
+
+async function loadTile(key) {
+  tilesLoading.add(key);
+  try {
+    const r = await fetchWithTimeout(ROAD_DATA_URL + key + '.json', 20000);
+    if (r.status !== 404 && !r.ok) throw new Error('HTTP ' + r.status);
+    // 404 = ô không có đường nào (biển, ngoài Việt Nam)
+    const records = (r.status === 404) ? [] : await r.json();
+    roadTiles.set(key, records.map((rec, i) => decodeWay(rec, i, key)));
+    tileRetryAt.delete(key);
+    // Giữ bộ nhớ gọn: bỏ các ô cũ không còn ở gần
+    const near = lastPoint ? tilesNear(lastPoint.lat, lastPoint.lon) : [];
+    for (const k of roadTiles.keys()) {
+      if (roadTiles.size <= ROAD_TILES_IN_MEMORY) break;
+      if (!near.includes(k)) roadTiles.delete(k);
+    }
+  } catch (e) {
+    tileRetryAt.set(key, Date.now() + 20000);
+  }
+  tilesLoading.delete(key);
+  if (lastPoint) updateLimitFromRoads(lastPoint.lat, lastPoint.lon, lastPoint.heading);
+}
+
+// Tìm đường đang chạy: gần vị trí nhất và cùng hướng với xe
+function matchRoad(lat, lon, heading) {
+  const cosLat = Math.cos(lat * Math.PI / 180);
+  let best = null;
+  for (const key of tilesNear(lat, lon)) {
+    for (const way of roadTiles.get(key) || []) {
+      for (let i = 0; i + 1 < way.points.length; i++) {
+        const a = way.points[i], b = way.points[i + 1];
+        const ax = (a[1] - lon) * 111320 * cosLat, ay = (a[0] - lat) * 111320;
+        const bx = (b[1] - lon) * 111320 * cosLat, by = (b[0] - lat) * 111320;
+        const sx = bx - ax, sy = by - ay;
+        const len2 = sx * sx + sy * sy;
+        if (!len2) continue;
+        const u = Math.max(0, Math.min(1, -(ax * sx + ay * sy) / len2));
+        const dist = Math.hypot(ax + u * sx, ay + u * sy);
+        if (dist > ROAD_MATCH_M) continue;
+
+        let score = dist;
+        let forward = true;
+        if (heading != null) {
+          const segBearing = (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360;
+          let diff = Math.abs(segBearing - heading) % 360;
+          if (diff > 180) diff = 360 - diff;
+          forward = diff <= 90;
+          // Đường hai chiều: đi hướng nào cũng khớp. Một chiều: đi ngược thì bị trừ điểm.
+          const allowedDiff = way.oneway ? (way.reversed ? 180 - diff : diff) : Math.min(diff, 180 - diff);
+          score += allowedDiff * 0.5;
+        }
+        if (way.id === currentWayId) score -= 8;   // đừng nhảy qua lại giữa hai đường sát nhau
+        if (!best || score < best.score) best = { way, forward, score };
+      }
+    }
+  }
+  return best;
+}
+
+let currentWayId = null;
+let lastLimitAt = 0;          // lần cuối xác định được đường đang chạy
+
+function updateLimitFromRoads(lat, lon, heading) {
+  const match = matchRoad(lat, lon, heading);
+  if (match) {
+    const way = match.way;
+    const known = match.forward ? way.limitForward : way.limitBackward;
+    currentWayId = way.id;
+    lastLimitAt = Date.now();
+    if (known) renderSpeedLimit(known, false);
+    else renderSpeedLimit(way.estimate, true);
+    if (way.name) setStatus(way.name);
+  } else {
+    if (Date.now() - lastLimitAt > LIMIT_STALE_MS) {
+      currentWayId = null;
+      renderSpeedLimit(null, false);
+    }
+    if (tilesNear(lat, lon).some(k => tileRetryAt.has(k))) {
+      setStatus('⚠️ Chưa tải được dữ liệu đường, đang thử lại…');
+    }
+  }
+}
+
+function lookupSpeedLimit(lat, lon, heading) {
+  lastPoint = { lat, lon, heading };
+  for (const key of tilesNear(lat, lon)) {
+    if (roadTiles.has(key) || tilesLoading.has(key)) continue;
+    if (Date.now() < (tileRetryAt.get(key) || 0)) continue;
+    loadTile(key);
+  }
+  updateLimitFromRoads(lat, lon, heading);
+}
+
+// estimated = số ước tính theo loại đường: chỉ hiện để tham khảo, không cảnh báo
+function renderSpeedLimit(limit, estimated) {
+  speedLimit = (limit && !estimated) ? limit : null;
+  const el = document.getElementById('speed-limit');
+  const box = document.getElementById('speed-limit-box');
+  el.textContent = limit ? (estimated ? '~' + limit : limit) : '--';
+  box.classList.toggle('unknown', !limit);
+  box.classList.toggle('estimated', !!limit && !!estimated);
+  document.getElementById('speed-limit-label').textContent = (limit && estimated) ? 'ƯỚC TÍNH' : 'GIỚI HẠN';
+}
+
+/* ---------- Hiển thị tốc độ + cảnh báo ---------- */
+function renderCurrentSpeed(kmh) {
+  const el = document.getElementById('current-speed');
+  const box = document.getElementById('current-speed-box');
+  const warn = document.getElementById('warning');
+  if (kmh == null) {
+    el.textContent = '--';
+    box.classList.remove('over');
+    warn.classList.add('hidden');
+    return;
+  }
+  el.textContent = Math.round(kmh);
+
+  const over = (speedLimit != null && kmh > speedLimit + 5);
+  box.classList.toggle('over', over);
+  if (over) {
+    warn.classList.remove('hidden');
+    const now = Date.now();
+    if (soundOn && now - lastBeep > 4000) { lastBeep = now; beep(); }
+  } else {
+    warn.classList.add('hidden');
+  }
+}
+
+/* ---------- Tiếng "bíp" cảnh báo (không cần file) ---------- */
+let audioCtx = null;
+let soundOn = true;
+try { soundOn = localStorage.getItem('mazda_sound') !== 'off'; } catch (e) {}
+
+function renderSoundButton() {
+  const b = document.getElementById('btn-sound');
+  b.textContent = soundOn ? '🔔' : '🔕';
+  b.classList.toggle('active', soundOn);
+}
+renderSoundButton();
+document.getElementById('btn-sound').addEventListener('click', function () {
+  soundOn = !soundOn;
+  try { localStorage.setItem('mazda_sound', soundOn ? 'on' : 'off'); } catch (e) {}
+  renderSoundButton();
+  if (soundOn) beep();      // kêu thử để biết loa đang hoạt động
+});
+// Trình duyệt chỉ cho phát âm thanh sau lần chạm đầu tiên vào trang
+document.addEventListener('pointerdown', function () { ensureAudio(); }, { once: true });
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function beep() {
+  try {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    for (let i = 0; i < 3; i++) {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = 'square'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, t + i * 0.25);
+      g.gain.exponentialRampToValueAtTime(0.3, t + i * 0.25 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.25 + 0.22);
+      o.connect(g).connect(audioCtx.destination);
+      o.start(t + i * 0.25); o.stop(t + i * 0.25 + 0.22);
+    }
+  } catch (e) {}
+}
+
+/* ============================================================
+   VIDEO KHÔNG QUẢNG CÁO (qua Invidious)
+   ============================================================ */
+const videoEl = document.getElementById('video');
+const resultsEl = document.getElementById('results');
+const nowPlayingEl = document.getElementById('now-playing');
+let queue = [];
+let queueIndex = -1;
+let currentVideoId = null;
+let dashPlayer = null;
+let pendingResumeTime = 0;
+let lastTimeSave = 0;
+let playToken = 0;          // mỗi lần phát có số riêng, để bỏ qua kết quả của lần phát cũ
+let startupTimer = null;
+let currentItem = null;
+let resultsTab = 'search';
+let lastSearchItems = [];
+const STORAGE_KEY = 'mazda_video_state';
+const GOOD_INSTANCE_KEY = 'mazda_good_instance';
+const FAVORITES_KEY = 'mazda_favorites';
+const HISTORY_KEY = 'mazda_history';
+const HISTORY_MAX = 50;
+
+function fetchWithTimeout(url, ms = 9000) {
+  if (typeof AbortController !== 'undefined') {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), ms);
+    return fetch(url, { signal: c.signal }).finally(() => clearTimeout(t));
+  }
+  return fetch(url);
+}
+
+// Danh sách instance, cái vừa chạy tốt lần trước được xếp lên đầu
+let instances = INVIDIOUS_INSTANCES.slice();
+try {
+  const good = localStorage.getItem(GOOD_INSTANCE_KEY);
+  if (good) instances = [good].concat(instances.filter(x => x !== good));
+} catch (e) {}
+
+function markInstanceGood(base) {
+  instances = [base].concat(instances.filter(x => x !== base));
+  try { localStorage.setItem(GOOD_INSTANCE_KEY, base); } catch (e) {}
+}
+
+// Lấy thêm instance mới từ danh sách công khai (chỉ cái có API và cho phép CORS)
+async function refreshInstances() {
+  try {
+    const r = await fetchWithTimeout(INSTANCE_LIST_URL);
+    const list = await r.json();
+    const found = list
+      .filter(([, i]) => i.type === 'https' && i.api && i.cors)
+      .map(([, i]) => i.uri.replace(/\/$/, ''));
+    instances = Array.from(new Set(instances.concat(found)));
+  } catch (e) {}
+}
+
+// Gọi API Invidious, tự thử lần lượt các instance (bỏ qua những cái trong skip)
+async function invidiousFetch(path, skip) {
+  let lastErr;
+  for (const base of instances.slice()) {
+    if (skip && skip.has(base)) continue;
+    try {
+      const r = await fetchWithTimeout(base + path);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      markInstanceGood(base);
+      return { data, base };
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('Không kết nối được Invidious');
+}
+
+// Lấy ảnh thumbnail (ưu tiên ảnh từ API, nếu không có thì dùng YouTube)
+function getThumb(item, videoId) {
+  const arr = item && item.videoThumbnails;
+  if (arr && arr.length) return arr[arr.length - 1].url;
+  return 'https://i.ytimg.com/vi/' + videoId + '/mqdefault.jpg';
+}
+
+function extractVideoId(url) {
+  const m = url && url.match(/[?&]v=([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : url;
+}
+
+function fmtDuration(sec) {
+  if (!sec || sec < 0) return '';
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+async function doSearch(q) {
+  setActiveTab('search');
+  resultsEl.innerHTML = '<div class="hint">Đang tìm…</div>';
+  try {
+    const { data } = await invidiousFetch('/api/v1/search?q=' + encodeURIComponent(q) + '&type=video');
+    // Video trực tiếp không có luồng DASH nên không phát được, bỏ khỏi kết quả
+    lastSearchItems = (Array.isArray(data) ? data : []).filter(x => !x.liveNow && !x.isUpcoming);
+    if (resultsTab === 'search') renderResults(lastSearchItems, 'Không có kết quả');
+  } catch (e) {
+    resultsEl.innerHTML = '<div class="err">Không tìm được. Các máy chủ video đang lỗi, thử lại sau.</div>';
+  }
+}
+
+/* ---------- Yêu thích + đã xem (lưu trong máy) ---------- */
+function loadList(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { return []; }
+}
+function saveList(key, list) {
+  try { localStorage.setItem(key, JSON.stringify(list)); } catch (e) {}
+}
+// Ảnh lấy thẳng từ YouTube vì địa chỉ ảnh của instance có thể chết sau này
+function toSavedItem(item) {
+  const videoId = item.videoId || extractVideoId(item.url);
+  return {
+    videoId,
+    title: item.title || '',
+    author: item.author || '',
+    lengthSeconds: item.lengthSeconds || 0,
+    videoThumbnails: [{ url: 'https://i.ytimg.com/vi/' + videoId + '/mqdefault.jpg' }]
+  };
+}
+function isFavorite(videoId) {
+  return loadList(FAVORITES_KEY).some(x => x.videoId === videoId);
+}
+function toggleFavorite(item) {
+  const saved = toSavedItem(item);
+  const list = loadList(FAVORITES_KEY);
+  const next = isFavorite(saved.videoId)
+    ? list.filter(x => x.videoId !== saved.videoId)
+    : [saved].concat(list);
+  saveList(FAVORITES_KEY, next);
+  renderFavButton();
+  if (resultsTab === 'favorites') showTab('favorites');
+  else document.querySelectorAll('.song').forEach(el => {
+    if (el.dataset.videoId === saved.videoId) {
+      el.querySelector('.fav').textContent = isFavorite(saved.videoId) ? '★' : '☆';
+    }
+  });
+}
+function addToHistory(item) {
+  const saved = toSavedItem(item);
+  const list = loadList(HISTORY_KEY).filter(x => x.videoId !== saved.videoId);
+  saveList(HISTORY_KEY, [saved].concat(list).slice(0, HISTORY_MAX));
+  if (resultsTab === 'history') showTab('history');
+}
+function renderFavButton() {
+  const on = !!currentItem && isFavorite(currentItem.videoId || extractVideoId(currentItem.url));
+  document.getElementById('np-fav').textContent = on ? '★' : '☆';
+}
+function setActiveTab(tab) {
+  resultsTab = tab;
+  document.querySelectorAll('#result-tabs button').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+}
+function showTab(tab) {
+  setActiveTab(tab);
+  if (tab === 'favorites') renderResults(loadList(FAVORITES_KEY), 'Chưa có video yêu thích. Bấm ☆ để lưu.');
+  else if (tab === 'history') renderResults(loadList(HISTORY_KEY), 'Chưa xem video nào');
+  else renderResults(lastSearchItems, 'Gõ tên video rồi bấm “Tìm”');
+}
+document.querySelectorAll('#result-tabs button').forEach(b => {
+  b.addEventListener('click', () => showTab(b.dataset.tab));
+});
+document.getElementById('np-fav').addEventListener('click', () => {
+  if (currentItem) toggleFavorite(currentItem);
+});
+
+function renderResults(items, emptyText) {
+  if (!items.length) {
+    resultsEl.innerHTML = '<div class="hint">' + escapeHtml(emptyText) + '</div>';
+    return;
+  }
+  resultsEl.innerHTML = '';
+  items.forEach((item, i) => {
+    const videoId = item.videoId || extractVideoId(item.url);
+    const d = document.createElement('div');
+    d.className = 'song' + (videoId === currentVideoId ? ' playing' : '');
+    d.innerHTML =
+      '<img src="' + escapeHtml(getThumb(item, videoId)) + '" alt="">' +
+      '<div class="meta"><div class="t">' + escapeHtml(item.title || '') + '</div>' +
+      '<div class="a">' + escapeHtml(item.author || '') + '</div></div>' +
+      '<div class="d">' + fmtDuration(item.lengthSeconds) + '</div>' +
+      '<button class="fav" title="Yêu thích">' + (isFavorite(videoId) ? '★' : '☆') + '</button>';
+    d.dataset.videoId = videoId;
+    d.addEventListener('click', () => {
+      queue = items.slice();      // hàng đợi = toàn bộ danh sách đang xem
+      playFromQueue(i);
+    });
+    d.querySelector('.fav').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFavorite(item);
+    });
+    resultsEl.appendChild(d);
+  });
+}
+
+function playFromQueue(i) {
+  if (i < 0 || i >= queue.length) return;
+  queueIndex = i;
+  playSong(queue[i]);
+}
+
+function showPlayError(msg) {
+  resultsEl.insertAdjacentHTML('afterbegin', '<div class="err">' + escapeHtml(msg) + '</div>');
+}
+
+// failCounts = số lần lỗi của từng instance với video này.
+// Instance có thể lỗi ngẫu nhiên nên được thử lại vài lần trước khi bỏ qua.
+async function playSong(item, failCounts) {
+  const token = ++playToken;
+  const counts = failCounts || new Map();
+  const videoId = item.videoId || extractVideoId(item.url);
+  const skip = new Set();
+  counts.forEach((n, b) => { if (n >= VIDEO_TRIES_PER_SERVER) skip.add(b); });
+  stopPlayer();
+  try {
+    const { data: s, base } = await invidiousFetch('/api/v1/videos/' + videoId, skip);
+    if (token !== playToken) return;
+    if (s.liveNow) {
+      showPlayError('Không phát được video trực tiếp.');
+      return;
+    }
+    applyPlayer(s, item, base, counts, token);
+  } catch (e) {
+    if (token === playToken) showPlayError('Không phát được video này trên máy chủ nào. Thử lại sau.');
+  }
+}
+
+// Áp dụng dữ liệu stream vào trình phát
+function applyPlayer(s, item, base, failCounts, token) {
+  const videoId = s.videoId || (item.videoId || extractVideoId(item.url));
+  currentVideoId = videoId;
+  currentItem = Object.assign({}, item, {
+    videoId,
+    title: item.title || s.title,
+    author: item.author || s.author,
+    lengthSeconds: item.lengthSeconds || s.lengthSeconds
+  });
+  renderNowPlaying({
+    title: currentItem.title,
+    artist: currentItem.author,
+    thumb: getThumb(item, videoId)
+  });
+  renderFavButton();
+  markPlaying(videoId);
+  addToHistory(currentItem);
+  playVideo(s, item, base, failCounts, token);
+  saveState();
+}
+
+function stopPlayer() {
+  clearTimeout(startupTimer);
+  if (dashPlayer) { try { dashPlayer.reset(); } catch (e) {} dashPlayer = null; }
+}
+
+function playVideo(s, item, base, failCounts, token) {
+  stopPlayer();
+
+  if (!window.dashjs) {
+    showPlayError('Không tải được trình phát video (dash.js).');
+    return;
+  }
+
+  // Lỗi hoặc tải quá lâu: thử lại rồi đổi instance khác, giữ nguyên vị trí đang xem
+  let failed = false;
+  function failOver() {
+    if (failed || token !== playToken) return;
+    failed = true;
+    failCounts.set(base, (failCounts.get(base) || 0) + 1);
+    if (videoEl.currentTime > 0) pendingResumeTime = videoEl.currentTime;
+    playSong(item, failCounts);
+  }
+
+  if (!s.dashUrl) { failOver(); return; }
+  try {
+    dashPlayer = dashjs.MediaPlayer().create();
+    startupTimer = setTimeout(failOver, VIDEO_START_TIMEOUT_MS);
+    videoEl.addEventListener('canplay', function () {
+      if (token === playToken) clearTimeout(startupTimer);
+    }, { once: true });
+    // local=true để instance proxy toàn bộ phân đoạn video (URL gốc bị khóa IP)
+    dashPlayer.initialize(videoEl, s.dashUrl + '?local=true', true);
+    dashPlayer.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, function () {
+      if (pendingResumeTime > 0) {
+        try { videoEl.currentTime = pendingResumeTime; } catch (e) {}
+        pendingResumeTime = 0;
+      }
+    });
+    dashPlayer.on(dashjs.MediaPlayer.events.ERROR, failOver);
+  } catch (e) {
+    failOver();
+  }
+}
+
+function renderNowPlaying(info) {
+  nowPlayingEl.classList.add('show');
+  document.getElementById('np-title').textContent = info.title || '—';
+  document.getElementById('np-artist').textContent = info.artist || '—';
+  document.getElementById('np-thumb').src = info.thumb || '';
+}
+
+function markPlaying(videoId) {
+  document.querySelectorAll('.song').forEach(el => {
+    el.classList.toggle('playing', el.dataset.videoId === videoId);
+  });
+}
+
+// Tự động phát video kế tiếp + lưu trạng thái
+videoEl.addEventListener('ended', () => {
+  saveState();
+  playFromQueue(queueIndex + 1);
+});
+videoEl.addEventListener('timeupdate', function () {
+  const now = Date.now();
+  if (currentVideoId && now - lastTimeSave > 2000) {
+    lastTimeSave = now;
+    saveState();
+  }
+});
+videoEl.addEventListener('pause', saveState);
+
+/* ---------- Ẩn hình khi xe chạy ---------- */
+let carMoving = false;
+let stoppedSince = 0;
+let passengerMode = false;
+
+function applyDriveMode() {
+  document.getElementById('app').classList.toggle('driving', carMoving && !passengerMode);
+}
+function updateDriveMode(kmh) {
+  if (kmh == null) return;
+  if (kmh > HIDE_VIDEO_KMH) {
+    stoppedSince = 0;
+    carMoving = true;
+    applyDriveMode();
+  } else if (kmh <= SHOW_VIDEO_KMH && !stoppedSince) {
+    stoppedSince = Date.now();
+  }
+}
+// Kiểm tra định kỳ vì lúc xe đứng yên GPS có thể ngừng gửi vị trí mới
+setInterval(function () {
+  if (carMoving && stoppedSince && Date.now() - stoppedSince > 3000) {
+    carMoving = false;
+    applyDriveMode();
+  }
+}, 1000);
+
+document.getElementById('btn-passenger').addEventListener('click', function () {
+  passengerMode = !passengerMode;
+  this.classList.toggle('active', passengerMode);
+  this.textContent = '👤 Hành khách: ' + (passengerMode ? 'bật' : 'tắt');
+  applyDriveMode();
+});
+document.getElementById('btn-prev').addEventListener('click', () => playFromQueue(queueIndex - 1));
+document.getElementById('btn-next').addEventListener('click', () => playFromQueue(queueIndex + 1));
+document.getElementById('btn-playpause').addEventListener('click', () => {
+  if (videoEl.paused) videoEl.play().catch(function () {});
+  else videoEl.pause();
+});
+
+// Phóng to / thu nhỏ (bản đồ full màn hình, video phóng to trong nửa bên phải)
+function setFocus(pane) {
+  const app = document.getElementById('app');
+  const isMap = (pane === 'map');
+  const isVideo = (pane === 'video');
+  app.classList.toggle('focus-map', isMap);
+  app.classList.toggle('video-focus', isVideo);
+  const bm = document.getElementById('btn-expand-map');
+  const bv = document.getElementById('btn-expand-music');
+  bm.textContent = isMap ? '✕' : '⛶';
+  bm.title = isMap ? 'Thu nhỏ' : 'Phóng to bản đồ';
+  bv.textContent = isVideo ? '✕ Thu nhỏ' : '⛶ Phóng to';
+  bv.title = isVideo ? 'Thu nhỏ' : 'Phóng to video';
+  // cập nhật lại kích thước bản đồ sau khi đổi bố cục
+  setTimeout(function () { if (map) map.invalidateSize(); }, 150);
+}
+document.getElementById('btn-expand-map').addEventListener('click', function () {
+  const app = document.getElementById('app');
+  setFocus(app.classList.contains('focus-map') ? '' : 'map');
+});
+document.getElementById('btn-expand-music').addEventListener('click', function () {
+  const app = document.getElementById('app');
+  setFocus(app.classList.contains('video-focus') ? '' : 'video');
+});
+
+document.getElementById('search-btn').addEventListener('click', () => {
+  const q = document.getElementById('search-input').value.trim();
+  if (q) doSearch(q);
+});
+document.getElementById('search-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('search-btn').click();
+});
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Lưu video đang xem để lần sau mở lại tiếp tục
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      videoId: currentVideoId,
+      title: document.getElementById('np-title').textContent,
+      author: document.getElementById('np-artist').textContent,
+      thumb: document.getElementById('np-thumb').getAttribute('src') || '',
+      time: videoEl.currentTime || 0
+    }));
+  } catch (e) {}
+}
+
+// Khôi phục video đang xem dở khi mở lại trang
+function resumeLast() {
+  let st = null;
+  try { st = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (e) {}
+  if (!st || !st.videoId) return;
+  pendingResumeTime = st.time || 0;
+  const item = {
+    videoId: st.videoId,
+    title: st.title || '',
+    author: st.author || '',
+    videoThumbnails: st.thumb ? [{ url: st.thumb }] : null
+  };
+  playSong(item);
+}
+
+/* ============================================================
+   KHỞI ĐỘNG
+   ============================================================ */
+startGPS();
+refreshInstances(); // lấy thêm máy chủ video dự phòng
+resumeLast();       // tiếp tục video đang xem dở
+doSearch('lofi');   // tải sẵn vài video cho khỏi trống
+</script>
+</body>
+</html>
