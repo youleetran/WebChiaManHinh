@@ -32,6 +32,7 @@ Màn hình Mazda Connect **không có trình duyệt chính thức**. Chọn 1 c
 - Trang web hiển thị **giới hạn tốc độ (km/h)** của con đường hiện tại, lấy từ dữ liệu **OpenStreetMap**.
 - Khi chạy quá giới hạn **+5 km/h** → bảng tốc độ đổi màu đỏ + nháy "CHẠY QUÁ TỐC ĐỘ" + tiếng bíp.
 - ❌ Đây **KHÔNG phải** cảnh báo **camera bắn tốc độ** thời gian thực (tính năng đó chỉ có ở app Waze). Trang web không thay thế được Waze nếu bạn cần cảnh báo camera.
+- Trên bản đồ có hai ô chỉ hiện số: biển tròn là giới hạn, ô bên cạnh là tốc độ hiện tại.
 - Đường chưa có dữ liệu `maxspeed` trên OpenStreetMap → hiện số **ước tính** theo loại đường, màu xám, có dấu `~` (ví dụ `~50`). Số ước tính **không kích hoạt cảnh báo** và có thể khác biển báo thật. Bảng tốc độ chỉ hiện `--` khi không xác định được đường đang chạy (ví dụ xe cách đường trên 35 m).
 - Dữ liệu đường nằm sẵn trong `data/roads` (OpenStreetMap, bản ngày 01/11/2026), mỗi lần chỉ tải ô quanh vị trí xe, ô nặng nhất dưới 1 MB. Rớt mạng vẫn tra được trong các ô đã tải.
 - ⚠️ **Phần lớn đường chưa có biển số trong dữ liệu**, nên trên các đường đó trang chỉ hiện số ước tính và không cảnh báo. Tỷ lệ đường có số trên toàn quốc: cao tốc 80%, quốc lộ/đường trục 22–25%, đường cấp 2 khoảng 11%, đường cấp 3 khoảng 7%, đường dân cư gần 0%.
@@ -61,6 +62,9 @@ Dữ liệu © OpenStreetMap, giấy phép ODbL: giữ dòng ghi nguồn ở gó
 - Video trực tiếp (live) không phát được nên không hiện trong kết quả tìm kiếm.
 
 ## 8. Yêu thích và đã xem
+- Khi đang phát, video chiếm hết nửa bên phải. Rê chuột hoặc chạm vào video thì tên bài hiện nhỏ trong 3 giây, nút ☆ nằm ở đó.
+- Bấm **☰ Danh sách** hoặc tìm kiếm để xem danh sách, video thu nhỏ ở góc. Chạm vào video nhỏ để quay lại. Nút ▲ ▼ để cuộn danh sách.
+- Chạm vào ô tìm sẽ hiện các tìm kiếm gần đây và gợi ý có sẵn.
 - Bấm ☆ để lưu video. Xem lại ở tab **★ Yêu thích** và **Đã xem** (tối đa 50 video gần nhất). Dữ liệu lưu trong trình duyệt của thiết bị đang dùng.
 
 ## 9. Lưu ý an toàn

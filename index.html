@@ -44,7 +44,6 @@
 
   #map-tools {
     position: absolute; z-index: 1000; top: 10px; right: 10px;
-    max-width: calc(100% - 240px);
     display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px;
   }
   .map-btn {
@@ -61,27 +60,26 @@
     max-width: 70%;
   }
 
-  /* Bảng tốc độ nổi trên bản đồ */
+  /* Bảng tốc độ nổi trên bản đồ. Đặt bên phải vì trên CarPlay mép trái trang có thể bị thanh ứng dụng che */
   #speed-overlay {
-    position: absolute; z-index: 1000; top: 10px; left: 10px;
-    display: flex; gap: 10px;
+    position: absolute; z-index: 1000; top: 10px; right: 122px;
+    display: flex; gap: 6px;
   }
   .speed-card {
     background: rgba(14,17,22,0.92); border: 1px solid var(--border);
-    border-radius: 12px; padding: 8px 12px; text-align: center; min-width: 92px;
+    border-radius: 10px; padding: 3px; text-align: center; min-width: 52px;
+    display: flex; align-items: center; justify-content: center;
   }
-  .speed-card .label { font-size: 13px; color: var(--muted); letter-spacing: 1px; }
-  .speed-card .value { font-size: 42px; font-weight: 700; line-height: 1.1; }
-  .speed-card .unit  { font-size: 13px; color: var(--muted); }
+  .speed-card .value { font-size: 28px; font-weight: 700; line-height: 1; }
 
   /* Biển giới hạn tốc độ (hình tròn đỏ) */
   #speed-limit-box .value {
-    display: inline-block; width: 74px; height: 74px; line-height: 74px;
-    border: 7px solid #e11d2e; border-radius: 50%;
-    background: #fff; color: #111; font-size: 34px; font-weight: 800;
+    display: inline-block; width: 44px; height: 44px; line-height: 36px;
+    border: 4px solid #e11d2e; border-radius: 50%;
+    background: #fff; color: #111; font-size: 19px; font-weight: 800;
   }
-  #speed-limit-box.unknown .value { color: #999; font-size: 26px; }
-  #speed-limit-box.estimated .value { color: #777; border-color: #999; font-size: 28px; }
+  #speed-limit-box.unknown .value { color: #999; font-size: 16px; }
+  #speed-limit-box.estimated .value { color: #777; border-color: #999; font-size: 15px; }
 
   /* Tốc độ hiện tại */
   #current-speed-box .value { color: #7ee787; }
@@ -89,10 +87,10 @@
 
   /* Cảnh báo chạy quá tốc độ */
   #warning {
-    position: absolute; z-index: 1001; top: 150px; left: 50%; white-space: nowrap;
+    position: absolute; z-index: 1001; top: 68px; left: 60%; white-space: nowrap;
     transform: translateX(-50%);
-    background: var(--accent); color: #fff; font-weight: 800; font-size: 26px;
-    padding: 10px 22px; border-radius: 12px;
+    background: var(--accent); color: #fff; font-weight: 800; font-size: 18px;
+    padding: 6px 14px; border-radius: 10px;
     animation: blink 0.6s steps(2, start) infinite;
   }
   #warning.hidden { display: none; }
@@ -100,55 +98,89 @@
 
   /* ===== PHẢI: NHẠC ===== */
   #music-pane {
+    position: relative;
     flex: 1 1 50%; min-width: 0;
     display: flex; flex-direction: column; background: var(--panel);
   }
   #music-pane .head {
-    padding: 12px; border-bottom: 1px solid var(--border);
+    padding: 6px 8px; border-bottom: 1px solid var(--border);
     font-size: 20px; font-weight: 700;
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
   }
   .expand-btn {
-    flex: 0 0 auto; font-size: 16px; padding: 8px 12px;
+    flex: 0 0 auto; font-size: 14px; padding: 8px;
     background: var(--bg); color: var(--text); border: 1px solid var(--border);
     border-radius: 8px; cursor: pointer; font-weight: 600; white-space: nowrap;
   }
 
-  .search-bar { display: flex; gap: 8px; padding: 12px; }
+  .search-bar { position: relative; display: flex; gap: 6px; padding: 6px 8px; }
   #search-input {
-    flex: 1; font-size: 20px; padding: 12px 14px;
+    flex: 1; min-width: 0; font-size: 16px; padding: 8px 10px;
     background: var(--bg); color: var(--text);
     border: 1px solid var(--border); border-radius: 10px; outline: none;
   }
   #search-btn {
-    font-size: 20px; padding: 12px 18px; border: none; border-radius: 10px;
+    font-size: 16px; padding: 8px 14px; border: none; border-radius: 10px;
     background: var(--accent); color: #fff; font-weight: 700; cursor: pointer;
   }
-
-  #now-playing {
-    padding: 0 12px; display: none;
+  #search-history {
+    position: absolute; z-index: 20; top: 100%; left: 8px; right: 8px;
+    display: none; max-height: 190px; overflow-y: auto;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
   }
+  #search-history.show { display: block; }
+  #search-history button {
+    display: block; width: 100%; padding: 9px 12px; cursor: pointer; text-align: left;
+    font-size: 15px; color: var(--text); background: none; border: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  #now-playing { position: relative; display: none; }
   #now-playing.show { display: block; }
+  /* Tên bài chỉ hiện nhỏ trên video khi rê chuột hoặc chạm vào */
   .np-card {
-    display: flex; gap: 12px; align-items: center;
-    background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
-    padding: 10px;
+    position: absolute; z-index: 2; top: 4px; left: 12px; right: 12px;
+    display: flex; gap: 8px; align-items: center;
+    background: rgba(14,17,22,0.85); border-radius: 8px; padding: 3px 6px;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
   }
-  .np-card img { width: 74px; height: 74px; border-radius: 8px; object-fit: cover; background: #222; }
+  #now-playing.info .np-card { opacity: 1; pointer-events: auto; }
+  .np-card img { width: 26px; height: 26px; border-radius: 4px; object-fit: cover; background: #222; }
   .np-info { flex: 1; min-width: 0; }
-  .np-info .t { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .np-info .a { font-size: 14px; color: var(--muted); }
-  #video { width: 100%; margin-top: 8px; border-radius: 10px; background: #000; max-height: 42vh; }
+  .np-info .t { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-info .a { display: none; }
+  .np-card .fav { font-size: 20px; padding: 2px 4px; }
+  #video { display: block; width: 100%; border-radius: 10px; background: #000; }
 
-  #results { flex: 1; overflow-y: auto; padding: 8px 12px 20px; }
+  /* Đang xem video: video chiếm hết chỗ, danh sách ẩn */
+  #app.video-view #result-tabs,
+  #app.video-view #results { display: none; }
+  #app.video-view #now-playing.show { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 8px 8px; }
+  #app.video-view #video { flex: 1; min-height: 0; }
+
+  /* Đang xem danh sách: video thu nhỏ ở góc, chạm vào để quay lại */
+  #app.list-view #now-playing.show {
+    position: absolute; z-index: 5; right: 20px; bottom: 8px; width: 150px; cursor: pointer;
+    border: 2px solid var(--accent); border-radius: 12px;
+  }
+  #app.list-view #video { pointer-events: none; }
+  #app.list-view .np-card { display: none; }
+  #app.list-view #results { padding-bottom: 100px; }
+
+  #results {
+    flex: 1; min-height: 0; overflow-y: auto; padding: 6px 8px 20px;
+    scrollbar-color: #6a6e7c transparent;
+  }
+  #results::-webkit-scrollbar { width: 12px; }
+  #results::-webkit-scrollbar-thumb { background: #6a6e7c; border-radius: 6px; }
   .song {
-    display: flex; gap: 12px; align-items: center; padding: 10px;
+    display: flex; gap: 10px; align-items: center; padding: 5px;
     border-radius: 10px; cursor: pointer; border: 1px solid transparent;
   }
   .song:hover, .song.playing { background: var(--bg); border-color: var(--accent); }
-  .song img { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; background: #222; flex: 0 0 56px; }
+  .song img { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; background: #222; flex: 0 0 44px; }
   .song .meta { flex: 1; min-width: 0; }
-  .song .t { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song .t { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .song .a { font-size: 13px; color: var(--muted); }
   .song .d { font-size: 13px; color: var(--muted); flex: 0 0 auto; }
 
@@ -162,17 +194,18 @@
     color: #f5c518; font-size: 26px; line-height: 1; padding: 6px 8px;
   }
 
-  #result-tabs { display: flex; gap: 6px; padding: 8px 12px 0; }
+  #result-tabs { display: flex; gap: 6px; padding: 2px 8px 0; }
   #result-tabs button {
-    flex: 1; font-size: 15px; padding: 8px; cursor: pointer;
+    flex: 1; font-size: 14px; padding: 7px 4px; cursor: pointer;
     background: var(--bg); color: var(--muted);
     border: 1px solid var(--border); border-radius: 8px;
   }
   #result-tabs button.active { color: var(--text); border-color: var(--accent); }
+  #result-tabs .scroll-btn { flex: 0 0 44px; color: var(--text); }
 
   .drive-buttons { display: flex; flex: 0 0 auto; gap: 8px; }
   .drive-buttons button {
-    width: 56px; height: 48px; font-size: 24px; cursor: pointer;
+    width: 48px; height: 40px; font-size: 20px; cursor: pointer;
     background: var(--bg); color: var(--text);
     border: 1px solid var(--border); border-radius: 10px;
   }
@@ -203,14 +236,10 @@
 
     <div id="speed-overlay">
       <div class="speed-card" id="speed-limit-box">
-        <div class="label" id="speed-limit-label">GIỚI HẠN</div>
         <div class="value" id="speed-limit">--</div>
-        <div class="unit">km/h</div>
       </div>
       <div class="speed-card" id="current-speed-box">
-        <div class="label">TỐC ĐỘ</div>
         <div class="value" id="current-speed">--</div>
-        <div class="unit">km/h</div>
       </div>
     </div>
 
@@ -232,6 +261,7 @@
         <button id="btn-next" title="Video sau">⏭</button>
       </div>
       <div class="head-buttons">
+        <button class="expand-btn" id="btn-list" title="Xem danh sách video">☰ Danh sách</button>
         <button class="expand-btn" id="btn-expand-music" title="Phóng to video">⛶ Phóng to</button>
       </div>
     </div>
@@ -239,6 +269,7 @@
     <div class="search-bar">
       <input id="search-input" type="text" placeholder="Tìm video / bài hát…" />
       <button id="search-btn">Tìm</button>
+      <div id="search-history"></div>
     </div>
 
     <div id="now-playing">
@@ -257,6 +288,8 @@
       <button data-tab="search" class="active">Kết quả</button>
       <button data-tab="favorites">★ Yêu thích</button>
       <button data-tab="history">Đã xem</button>
+      <button class="scroll-btn" id="btn-scroll-up" title="Cuộn lên">▲</button>
+      <button class="scroll-btn" id="btn-scroll-down" title="Cuộn xuống">▼</button>
     </div>
 
     <div id="results"><div class="hint">Gõ tên video rồi bấm “Tìm”</div></div>
@@ -655,7 +688,6 @@ function renderSpeedLimit(limit, estimated) {
   el.textContent = limit ? (estimated ? '~' + limit : limit) : '--';
   box.classList.toggle('unknown', !limit);
   box.classList.toggle('estimated', !!limit && !!estimated);
-  document.getElementById('speed-limit-label').textContent = (limit && estimated) ? 'ƯỚC TÍNH' : 'GIỚI HẠN';
 }
 
 /* ---------- Hiển thị tốc độ + cảnh báo ---------- */
@@ -752,6 +784,10 @@ const GOOD_INSTANCE_KEY = 'mazda_good_instance';
 const FAVORITES_KEY = 'mazda_favorites';
 const HISTORY_KEY = 'mazda_history';
 const HISTORY_MAX = 50;
+const SEARCH_HISTORY_KEY = 'mazda_search_history';
+const SEARCH_HISTORY_MAX = 8;
+const DEFAULT_SEARCHES = ['Nhạc remix tiktok', 'Nhạc Chill', 'Nhạc ballad', 'Nhạc nhẹ', 'Nhạc hot tiktok'];
+const NP_INFO_MS = 3000;     // tên bài hiện bao lâu sau lần rê chuột hoặc chạm cuối
 
 function fetchWithTimeout(url, ms = 9000) {
   if (typeof AbortController !== 'undefined') {
@@ -881,7 +917,7 @@ function renderFavButton() {
 }
 function setActiveTab(tab) {
   resultsTab = tab;
-  document.querySelectorAll('#result-tabs button').forEach(b => {
+  document.querySelectorAll('#result-tabs button[data-tab]').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === tab);
   });
 }
@@ -891,7 +927,7 @@ function showTab(tab) {
   else if (tab === 'history') renderResults(loadList(HISTORY_KEY), 'Chưa xem video nào');
   else renderResults(lastSearchItems, 'Gõ tên video rồi bấm “Tìm”');
 }
-document.querySelectorAll('#result-tabs button').forEach(b => {
+document.querySelectorAll('#result-tabs button[data-tab]').forEach(b => {
   b.addEventListener('click', () => showTab(b.dataset.tab));
 });
 document.getElementById('np-fav').addEventListener('click', () => {
@@ -917,6 +953,7 @@ function renderResults(items, emptyText) {
     d.dataset.videoId = videoId;
     d.addEventListener('click', () => {
       queue = items.slice();      // hàng đợi = toàn bộ danh sách đang xem
+      setListOpen(false);
       playFromQueue(i);
     });
     d.querySelector('.fav').addEventListener('click', (e) => {
@@ -935,6 +972,7 @@ function playFromQueue(i) {
 
 function showPlayError(msg) {
   resultsEl.insertAdjacentHTML('afterbegin', '<div class="err">' + escapeHtml(msg) + '</div>');
+  setListOpen(true);
 }
 
 // failCounts = số lần lỗi của từng instance với video này.
@@ -1047,7 +1085,41 @@ function renderNowPlaying(info) {
   document.getElementById('np-title').textContent = info.title || '—';
   document.getElementById('np-artist').textContent = info.artist || '—';
   document.getElementById('np-thumb').src = info.thumb || '';
+  renderRightPane();
+  showNowPlayingInfo();
 }
+
+/* ---------- Nửa bên phải: xem video hoặc xem danh sách ---------- */
+let listOpen = false;
+let npInfoTimer = null;
+
+function renderRightPane() {
+  const hasVideo = nowPlayingEl.classList.contains('show');
+  const app = document.getElementById('app');
+  app.classList.toggle('video-view', hasVideo && !listOpen);
+  app.classList.toggle('list-view', hasVideo && listOpen);
+  videoEl.controls = !listOpen;
+  document.getElementById('btn-list').textContent = listOpen ? '🎬 Video' : '☰ Danh sách';
+}
+function setListOpen(open) {
+  listOpen = open;
+  renderRightPane();
+}
+function showNowPlayingInfo() {
+  nowPlayingEl.classList.add('info');
+  clearTimeout(npInfoTimer);
+  npInfoTimer = setTimeout(function () { nowPlayingEl.classList.remove('info'); }, NP_INFO_MS);
+}
+nowPlayingEl.addEventListener('pointermove', showNowPlayingInfo);
+nowPlayingEl.addEventListener('pointerdown', showNowPlayingInfo);
+nowPlayingEl.addEventListener('click', function () { if (listOpen) setListOpen(false); });
+document.getElementById('btn-list').addEventListener('click', function () { setListOpen(!listOpen); });
+document.getElementById('btn-scroll-up').addEventListener('click', function () {
+  resultsEl.scrollBy({ top: -resultsEl.clientHeight * 0.8, behavior: 'smooth' });
+});
+document.getElementById('btn-scroll-down').addEventListener('click', function () {
+  resultsEl.scrollBy({ top: resultsEl.clientHeight * 0.8, behavior: 'smooth' });
+});
 
 function markPlaying(videoId) {
   document.querySelectorAll('.song').forEach(el => {
@@ -1084,6 +1156,7 @@ function setFocus(pane) {
   const isVideo = (pane === 'video');
   app.classList.toggle('focus-map', isMap);
   app.classList.toggle('video-focus', isVideo);
+  if (isVideo) setListOpen(false);
   const bm = document.getElementById('btn-expand-map');
   const bv = document.getElementById('btn-expand-music');
   bm.textContent = isMap ? '✕' : '⛶';
@@ -1102,9 +1175,46 @@ document.getElementById('btn-expand-music').addEventListener('click', function (
   setFocus(app.classList.contains('video-focus') ? '' : 'video');
 });
 
+/* ---------- Lịch sử tìm kiếm ---------- */
+const searchInput = document.getElementById('search-input');
+const searchHistoryEl = document.getElementById('search-history');
+
+function runSearch(q) {
+  const recent = loadList(SEARCH_HISTORY_KEY).filter(x => x.toLowerCase() !== q.toLowerCase());
+  saveList(SEARCH_HISTORY_KEY, [q].concat(recent).slice(0, SEARCH_HISTORY_MAX));
+  searchInput.value = q;
+  searchInput.blur();
+  setListOpen(true);
+  doSearch(q);
+}
+// Tìm gần đây xếp trước, sau đó là các gợi ý có sẵn; đang gõ thì lọc theo chữ đã gõ
+function renderSearchHistory(typed) {
+  const seen = new Set();
+  const items = loadList(SEARCH_HISTORY_KEY).concat(DEFAULT_SEARCHES).filter(x => {
+    const key = x.toLowerCase();
+    if (seen.has(key) || !key.includes(typed)) return false;
+    seen.add(key);
+    return true;
+  });
+  searchHistoryEl.innerHTML = '';
+  items.forEach(q => {
+    const b = document.createElement('button');
+    b.textContent = '🕘 ' + q;
+    b.addEventListener('click', () => runSearch(q));
+    searchHistoryEl.appendChild(b);
+  });
+  searchHistoryEl.classList.toggle('show', items.length > 0);
+}
+searchInput.addEventListener('focus', () => renderSearchHistory(''));
+searchInput.addEventListener('input', () => renderSearchHistory(searchInput.value.trim().toLowerCase()));
+searchInput.addEventListener('blur', () => searchHistoryEl.classList.remove('show'));
+// Giữ ô tìm không mất focus khi bấm vào lịch sử, nếu không danh sách đóng trước khi nhận được cú bấm
+searchHistoryEl.addEventListener('pointerdown', e => e.preventDefault());
+searchHistoryEl.addEventListener('mousedown', e => e.preventDefault());
+
 document.getElementById('search-btn').addEventListener('click', () => {
-  const q = document.getElementById('search-input').value.trim();
-  if (q) doSearch(q);
+  const q = searchInput.value.trim();
+  if (q) runSearch(q);
 });
 document.getElementById('search-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('search-btn').click();
@@ -1150,7 +1260,7 @@ function resumeLast() {
 startGPS();
 refreshInstances(); // lấy thêm máy chủ video dự phòng
 resumeLast();       // tiếp tục video đang xem dở
-doSearch('lofi');   // tải sẵn vài video cho khỏi trống
+doSearch('Nhạc Chill');   // tải sẵn vài video cho khỏi trống
 </script>
 </body>
 </html>
