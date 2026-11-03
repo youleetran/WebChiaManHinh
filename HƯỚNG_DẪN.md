@@ -46,10 +46,14 @@ Dữ liệu © OpenStreetMap, giấy phép ODbL: giữ dòng ghi nguồn ở gó
 - Nút 🔔 bật/tắt tiếng bíp. Bấm nút để bật sẽ kêu thử một lần. Trên iPhone, tiếng bíp lúc chạy quá tốc độ có thể không kêu, nên hãy nhìn cả cảnh báo đỏ trên màn hình.
 
 ## 5. Bản đồ dẫn đường
-- Khi có GPS, bản đồ tự nghiêng, xoay theo hướng xe chạy, phóng sát và hiện mũi tên xanh. Đây chỉ là bản đồ bám vị trí, chưa có chỉ đường theo lộ trình.
+- Khi có GPS, bản đồ tự xoay theo hướng xe chạy, hiện mũi tên xanh ở phía dưới, tên các đường và lối rẽ phía trước. Con đường đang chạy được tô màu xanh ngọc. Khi khớp được đường, mũi tên được đặt lên mặt đường và xoay theo hướng đường để bản đồ không lắc vì nhiễu GPS. Đây chỉ là bản đồ bám vị trí, chưa có chỉ đường theo lộ trình.
 - Kéo bản đồ để xem chỗ khác thì trang tạm thôi bám theo, sau 10 giây tự quay về xe. Nút **+ / −** ở góc dưới để phóng to, thu nhỏ.
 - GPS tự bật khi mở trang. Nếu lúc đó bị từ chối quyền vị trí, hãy cho phép rồi tải lại trang.
 - Bản đồ lấy từ [OpenFreeMap](https://openfreemap.org) (miễn phí, không cần tài khoản) nên cần mạng, và thiết bị phải hỗ trợ WebGL. Nếu không có WebGL, bản đồ sẽ báo lỗi.
+
+- Bản đồ hiện biểu tượng đèn giao thông, biển dừng, biển nhường đường, camera tốc độ và biển giới hạn khi xe tới gần, lấy từ `data/signs` (OpenStreetMap). Biểu tượng đèn chỉ cho biết vị trí, **không** cho biết đèn đang xanh hay đỏ.
+- ⚠️ Dữ liệu biển báo rất ít: cả nước 18 biển nhường đường, 11 biển dừng, 22 camera, 83 biển giới hạn, và phần lớn nơi không có biển nào. Không thấy biểu tượng không có nghĩa là ngoài đường không có biển. Luôn nhìn biển thật.
+- Cập nhật cùng dữ liệu đường: `python tools/build_signs.py vietnam-latest.osm.pbf data/signs`
 
 ## 6. Khi video bị giật
 - Trang chỉ phát H.264 tối đa 480p (`VIDEO_MAX_HEIGHT`) và tải trước 45 giây (`VIDEO_BUFFER_S`), để đỡ nặng máy và chịu được lúc mạng yếu.

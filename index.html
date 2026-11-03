@@ -37,8 +37,11 @@
 
   /* ===== TRÁI: BẢN ĐỒ ===== */
   #map-pane { position: relative; flex: 1 1 50%; min-width: 0; border-right: 2px solid var(--border); }
-  #map { position: absolute; inset: 0; background: #23262f; }
-  #nav-arrow { width: 44px; height: 44px; }
+  #map { position: absolute; inset: 0; background: #242f3e; }
+  #nav-arrow { width: 52px; height: 52px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.55)); }
+  #map .maplibregl-ctrl-group { background: rgba(23,32,44,0.92); border: 1px solid var(--border); box-shadow: none; }
+  #map .maplibregl-ctrl-group button + button { border-top-color: var(--border); }
+  #map .maplibregl-ctrl-group .maplibregl-ctrl-icon { filter: invert(1); }
   #map .maplibregl-ctrl-attrib { font-size: 10px; background: rgba(14,17,22,0.7); color: var(--muted); }
   #map .maplibregl-ctrl-attrib a { color: var(--muted); }
 
@@ -53,11 +56,12 @@
   }
   #btn-sound.active { background: var(--accent-green); color: #fff; }
 
+  /* Tên đường đang chạy, nằm giữa phía dưới như app dẫn đường */
   #gps-status {
-    position: absolute; z-index: 1000; left: 10px; bottom: 10px;
-    background: rgba(22,27,34,0.9); border: 1px solid var(--border);
-    border-radius: 8px; padding: 6px 10px; font-size: 13px; color: var(--muted);
-    max-width: 70%;
+    position: absolute; z-index: 1000; left: 50%; bottom: 22px; transform: translateX(-50%);
+    background: rgba(23,32,44,0.92); border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 16px; padding: 4px 14px; font-size: 15px; font-weight: 600; color: #fff;
+    max-width: 62%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
   /* Bảng tốc độ nổi trên bản đồ. Đặt bên phải vì trên CarPlay mép trái trang có thể bị thanh ứng dụng che */
@@ -314,13 +318,24 @@ const INVIDIOUS_INSTANCES = [
 ];
 const INSTANCE_LIST_URL = 'https://api.invidious.io/instances.json';
 const ROAD_DATA_URL = 'data/roads/';
+const SIGN_DATA_URL = 'data/signs/';
+// Phải giống SIGN_TYPES trong tools/build_signs.py
+const SIGN_TYPES = ['light', 'stop', 'give_way', 'camera', 'speed'];
 const DEFAULT_CENTER = [108.0, 16.05]; // Việt Nam (khi chưa có GPS), thứ tự kinh độ, vĩ độ
 const MAP_TILES_URL = 'https://tiles.openfreemap.org/planet';
 const MAP_FONTS_URL = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
-const NAV_ZOOM = 17;           // mức phóng khi dẫn đường
+const NAV_ZOOM = 16;           // mức phóng khi dẫn đường, đủ xa để thấy trước các lối rẽ
 const NAV_MIN_ZOOM = 14;       // thu nhỏ quá mức này thì lần cập nhật GPS sau tự phóng lại
-const NAV_PITCH = 60;          // độ nghiêng bản đồ
-const NAV_TOP_PADDING = 0.45;  // phần trên màn hình dành cho đường phía trước, mũi tên nằm ở dưới
+const NAV_PITCH = 50;          // độ nghiêng bản đồ
+const NAV_TOP_PADDING = 0.5;   // phần trên màn hình dành cho đường phía trước, mũi tên nằm ở dưới
+const SNAP_ROAD_M = 20;        // GPS cách đường không quá chừng này thì đặt mũi tên lên mặt đường
+const SNAP_ANGLE = 45;         // và hướng xe lệch hướng đường không quá chừng này
+const BEARING_SMOOTH = 0.4;    // mỗi lần GPS chỉ xoay bản đồ một phần độ lệch, để không bị lắc
+const BEARING_IGNORE = 2;      // lệch ít hơn chừng này độ thì không xoay
+const POSITION_SMOOTH = 0.3;   // mỗi lần GPS chỉ kéo mũi tên một phần về điểm đo, phần còn lại đi theo tốc độ xe
+const PREDICT_MAX_M = 25;      // điểm dự đoán lệch điểm đo quá chừng này thì tin điểm đo
+const PREDICT_MAX_TURN = 12;   // đang rẽ gắt hơn chừng này độ thì tin điểm đo, không dự đoán theo hướng cũ
+const STOP_HOLD_M = 8;         // xe đứng yên mà GPS nhảy trong khoảng này thì giữ nguyên mũi tên
 const NAV_MOVE_MIN_MS = 300;    // thời gian trượt giữa hai lần cập nhật GPS: bằng khoảng cách giữa hai lần,
 const NAV_MOVE_MAX_MS = 3000;  // trong giới hạn này, để xe trượt liền mạch chứ không chạy rồi dừng
 const HEADING_MIN_M = 8;       // máy không báo hướng thì tự tính sau mỗi quãng dài chừng này
@@ -357,44 +372,75 @@ const ROAD_CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', '
 const MAIN_ROAD_CLASSES = ['motorway', 'trunk', 'primary'];
 const isMainRoad = ['match', ['get', 'class'], MAIN_ROAD_CLASSES, true, false];
 function roadWidth(scale) {
-  const byClass = (main, other) => ['case', isMainRoad, main * scale, other * scale];
-  return ['interpolate', ['exponential', 1.5], ['zoom'], 10, byClass(1.5, 0.5), 14, byClass(5, 2), 18, byClass(30, 16)];
+  return ['interpolate', ['exponential', 1.5], ['zoom'],
+    10, ['case', isMainRoad, 1.5 * scale, 0.5 * scale],
+    14, ['case', isMainRoad, 4 * scale, 2 * scale],
+    18, ['case', isMainRoad, 24 * scale, 13 * scale]];
 }
+// Bỏ chữ "Đường", "Phố" ở đầu tên để nhãn ngắn, hiện được nhiều tên hơn
+const roadLabel = ['let', 'name', ['coalesce', ['get', 'name'], ['get', 'ref'], ''],
+  ['case',
+    ['==', ['slice', ['var', 'name'], 0, 6], 'Đường '], ['slice', ['var', 'name'], 6],
+    ['==', ['slice', ['var', 'name'], 0, 4], 'Phố '], ['slice', ['var', 'name'], 4],
+    ['var', 'name']]];
 const NAV_MAP_STYLE = {
   version: 8,
   glyphs: MAP_FONTS_URL,
-  sources: { osm: { type: 'vector', url: MAP_TILES_URL } },
+  sources: {
+    osm: { type: 'vector', url: MAP_TILES_URL },
+    'current-road': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+    signs: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
+  },
   layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#23262f' } },
-    { id: 'water', type: 'fill', source: 'osm', 'source-layer': 'water', paint: { 'fill-color': '#161a24' } },
+    { id: 'background', type: 'background', paint: { 'background-color': '#242f3e' } },
+    { id: 'park', type: 'fill', source: 'osm', 'source-layer': 'park', paint: { 'fill-color': '#263c3f' } },
+    { id: 'water', type: 'fill', source: 'osm', 'source-layer': 'water', paint: { 'fill-color': '#17263c' } },
     { id: 'road-edge', type: 'line', source: 'osm', 'source-layer': 'transportation',
       filter: ['in', ['get', 'class'], ['literal', ROAD_CLASSES]],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#6a6e7c', 'line-width': roadWidth(1.25) } },
+      paint: { 'line-color': '#1a2230', 'line-width': roadWidth(1.35) } },
     { id: 'road', type: 'line', source: 'osm', 'source-layer': 'transportation',
       filter: ['in', ['get', 'class'], ['literal', ROAD_CLASSES]],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': ['case', isMainRoad, '#565a68', '#3c3f4b'], 'line-width': roadWidth(1) } },
+      paint: { 'line-color': ['case', isMainRoad, '#8a7b5e', '#4a5568'], 'line-width': roadWidth(1) } },
     { id: 'building', type: 'fill-extrusion', source: 'osm', 'source-layer': 'building', minzoom: 15,
       paint: {
-        'fill-extrusion-color': '#343746',
+        'fill-extrusion-color': '#343f50',
         'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6],
         'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-        'fill-extrusion-opacity': 0.9
+        'fill-extrusion-opacity': 0.8
       } },
+    { id: 'current-road-edge', type: 'line', source: 'current-road',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#1a56c4', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 5, 16, 10, 18, 18] } },
+    { id: 'current-road', type: 'line', source: 'current-road',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#4d9bff', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 3, 16, 7, 18, 14] } },
     { id: 'road-name', type: 'symbol', source: 'osm', 'source-layer': 'transportation_name', minzoom: 12,
       layout: {
         'symbol-placement': 'line',
-        'text-field': ['coalesce', ['get', 'name'], ['get', 'ref'], ''],
+        'text-field': roadLabel,
         'text-font': ['Noto Sans Regular'],
-        'text-size': ['interpolate', ['linear'], ['zoom'], 12, 11, 17, 16],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 12, 13, 16, 17, 18, 20],
         'text-pitch-alignment': 'viewport',
-        'symbol-spacing': 220
+        'symbol-spacing': 160
       },
-      paint: { 'text-color': '#eceef4', 'text-halo-color': '#23262f', 'text-halo-width': 1.5 } },
+      paint: {
+        'text-color': ['case', isMainRoad, '#f5d9a8', '#e8ecf2'],
+        'text-halo-color': '#17202c', 'text-halo-width': 2
+      } },
+    { id: 'sign', type: 'symbol', source: 'signs', minzoom: 14,
+      layout: {
+        'icon-image': ['get', 'icon'],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 14, 0.65, 16, 1, 18, 1.25],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-pitch-alignment': 'viewport',
+        'icon-rotation-alignment': 'viewport'
+      } },
     { id: 'place-name', type: 'symbol', source: 'osm', 'source-layer': 'place', maxzoom: 14,
       layout: { 'text-field': ['coalesce', ['get', 'name'], ''], 'text-font': ['Noto Sans Regular'], 'text-size': 14 },
-      paint: { 'text-color': '#aeb3c2', 'text-halo-color': '#23262f', 'text-halo-width': 1.5 } }
+      paint: { 'text-color': '#d5b98a', 'text-halo-color': '#17202c', 'text-halo-width': 1.5 } }
   ]
 };
 
@@ -504,30 +550,75 @@ function readMotion(pos) {
   return { kmh, heading: lastHeading };
 }
 
+// Độ lệch ngắn nhất từ hướng a sang hướng b, từ -180 đến 180
+function angleDelta(a, b) {
+  return ((b - a + 540) % 360) - 180;
+}
+// GPS luôn nhiễu vài mét. Đi theo từng điểm thì bản đồ lắc, nên bám mũi tên vào mặt đường
+// và lấy hướng của đường khi khớp được, rồi xoay từ từ về hướng đó.
+let steadyAt = 0;
+function steadyPosition(lat, lon, heading, kmh) {
+  if (carPos && kmh != null && kmh < HEADING_MIN_KMH && distanceM(carPos.lat, carPos.lon, lat, lon) < STOP_HOLD_M) {
+    return carPos;
+  }
+  let target = heading;
+  let outLat = lat, outLon = lon;
+  const m = lastMatch;
+  if (m && heading != null && m.dist <= SNAP_ROAD_M && Math.abs(angleDelta(m.bearing, heading)) <= SNAP_ANGLE) {
+    target = m.bearing;
+    outLat = m.lat;
+    outLon = m.lon;
+  }
+  let smooth = target;
+  if (carPos && carPos.heading != null && target != null) {
+    const delta = angleDelta(carPos.heading, target);
+    smooth = Math.abs(delta) < BEARING_IGNORE ? carPos.heading : (carPos.heading + delta * BEARING_SMOOTH + 360) % 360;
+  }
+  // Dự đoán vị trí theo tốc độ và hướng, để xe tiến đều chứ không lúc nhanh lúc chậm theo nhiễu GPS
+  const now = Date.now();
+  const dt = (now - steadyAt) / 1000;
+  steadyAt = now;
+  const turning = carPos && carPos.heading != null && target != null &&
+    Math.abs(angleDelta(carPos.heading, target)) > PREDICT_MAX_TURN;
+  if (carPos && carPos.heading != null && !turning && kmh != null && kmh >= HEADING_MIN_KMH && dt <= NAV_MOVE_MAX_MS / 1000) {
+    const step = kmh / 3.6 * dt / 111320;
+    const rad = carPos.heading * Math.PI / 180;
+    const pLat = carPos.lat + Math.cos(rad) * step;
+    const pLon = carPos.lon + Math.sin(rad) * step / Math.cos(carPos.lat * Math.PI / 180);
+    if (distanceM(pLat, pLon, outLat, outLon) <= PREDICT_MAX_M) {
+      outLat = pLat + (outLat - pLat) * POSITION_SMOOTH;
+      outLon = pLon + (outLon - pLon) * POSITION_SMOOTH;
+    }
+  }
+  return { lat: outLat, lon: outLon, heading: smooth };
+}
+
 function onPosition(pos) {
   if (!map) return;
   const lat = pos.coords.latitude, lon = pos.coords.longitude;
   const { kmh, heading } = readMotion(pos);
 
-  const moved = !carPos || distanceM(carPos.lat, carPos.lon, lat, lon) >= 1 || carPos.heading !== heading;
-  carPos = { lat, lon, heading };
+  setStatus('GPS: ' + lat.toFixed(5) + ', ' + lon.toFixed(5));
+  lookupSpeedLimit(lat, lon, heading);    // tìm đường trước để biết đặt mũi tên vào đâu
+
+  const next = steadyPosition(lat, lon, heading, kmh);
+  const moved = !carPos || distanceM(carPos.lat, carPos.lon, next.lat, next.lon) >= 1 || carPos.heading !== next.heading;
+  carPos = next;
   if (!navArrow) navArrow = createNavArrow();
   if (follow) {
     if (moved || !frameSeen) moveCamera(false);     // đứng yên thì không vẽ lại, đỡ nặng máy
   } else {
-    placeArrow(lon, lat, heading || 0);
+    placeArrow(next.lon, next.lat, next.heading || 0);
   }
 
-  setStatus('GPS: ' + lat.toFixed(5) + ', ' + lon.toFixed(5));
-  lookupSpeedLimit(lat, lon, heading);
   renderCurrentSpeed(kmh);
 }
 
 function createNavArrow() {
   const el = document.createElement('div');
   el.id = 'nav-arrow';
-  el.innerHTML = '<svg viewBox="0 0 44 44" width="44" height="44">' +
-    '<path d="M22 3 L39 39 L22 31 L5 39 Z" fill="#2f8cff" stroke="#fff" stroke-width="3" stroke-linejoin="round"/></svg>';
+  el.innerHTML = '<svg viewBox="0 0 44 44" width="52" height="52">' +
+    '<path d="M22 4 L38 38 L22 30 L6 38 Z" fill="#1a73e8" stroke="#fff" stroke-width="3.5" stroke-linejoin="round"/></svg>';
   return new maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'map' })
     .setLngLat([carPos.lon, carPos.lat]).addTo(map);
 }
@@ -693,7 +784,15 @@ function matchRoad(lat, lon, heading) {
           score += allowedDiff * 0.5;
         }
         if (way.id === currentWayId) score -= 8;   // đừng nhảy qua lại giữa hai đường sát nhau
-        if (!best || score < best.score) best = { way, forward, score };
+        if (!best || score < best.score) {
+          const seg = (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360;
+          best = {
+            way, forward, score, dist,
+            bearing: forward ? seg : (seg + 180) % 360,
+            lat: lat + (ay + u * sy) / 111320,
+            lon: lon + (ax + u * sx) / (111320 * cosLat)
+          };
+        }
       }
     }
   }
@@ -703,19 +802,35 @@ function matchRoad(lat, lon, heading) {
 let currentWayId = null;
 let lastLimitAt = 0;          // lần cuối xác định được đường đang chạy
 
+// Tô màu con đường đang chạy trên bản đồ
+let highlightedWayId = null;
+function highlightRoad(way) {
+  const source = map && map.getSource('current-road');
+  const id = way ? way.id : null;
+  if (!source || id === highlightedWayId) return;
+  highlightedWayId = id;
+  source.setData(way
+    ? { type: 'Feature', geometry: { type: 'LineString', coordinates: way.points.map(p => [p[1], p[0]]) } }
+    : { type: 'FeatureCollection', features: [] });
+}
+
+let lastMatch = null;
 function updateLimitFromRoads(lat, lon, heading) {
   const match = matchRoad(lat, lon, heading);
+  lastMatch = match;
   if (match) {
     const way = match.way;
     const known = match.forward ? way.limitForward : way.limitBackward;
     currentWayId = way.id;
     lastLimitAt = Date.now();
+    highlightRoad(way);
     if (known) renderSpeedLimit(known, false);
     else renderSpeedLimit(way.estimate, true);
     if (way.name) setStatus(way.name);
   } else {
     if (Date.now() - lastLimitAt > LIMIT_STALE_MS) {
       currentWayId = null;
+      highlightRoad(null);
       renderSpeedLimit(null, false);
     }
     if (tilesNear(lat, lon).some(k => tileRetryAt.has(k))) {
@@ -724,8 +839,132 @@ function updateLimitFromRoads(lat, lon, heading) {
   }
 }
 
+/* ---------- Đèn giao thông và biển báo ----------
+   Đọc từ SIGN_DATA_URL (tạo bằng tools/build_signs.py), chia ô giống dữ liệu đường.
+   Đèn chỉ là biểu tượng vị trí: không có dữ liệu đèn đang xanh hay đỏ. */
+const signTiles = new Map();    // 'x_y' -> các điểm của ô đó, dạng GeoJSON
+const signRetryAt = new Map();
+
+function renderSigns() {
+  const source = map && map.getSource('signs');
+  if (source) source.setData({ type: 'FeatureCollection', features: Array.from(signTiles.values()).flat() });
+}
+if (map) map.on('load', renderSigns);
+
+async function loadSignTile(key) {
+  signTiles.set(key, []);     // đánh dấu để không tải trùng
+  try {
+    const r = await fetchWithTimeout(SIGN_DATA_URL + key + '.json', 20000);
+    if (r.status !== 404 && !r.ok) throw new Error('HTTP ' + r.status);
+    // 404 = ô không có đèn hay biển nào
+    const records = (r.status === 404) ? [] : await r.json();
+    signTiles.set(key, records.map(([lat, lon, type, value]) => ({
+      type: 'Feature',
+      properties: { icon: 'sign-' + SIGN_TYPES[type] + (value ? '-' + value : '') },
+      geometry: { type: 'Point', coordinates: [lon / 1e5, lat / 1e5] }
+    })));
+    const near = lastPoint ? tilesNear(lastPoint.lat, lastPoint.lon) : [];
+    for (const k of signTiles.keys()) {
+      if (signTiles.size <= ROAD_TILES_IN_MEMORY) break;
+      if (!near.includes(k)) signTiles.delete(k);
+    }
+    renderSigns();
+  } catch (e) {
+    signTiles.delete(key);
+    signRetryAt.set(key, Date.now() + 20000);
+  }
+}
+
+// Vẽ biểu tượng lúc bản đồ cần tới, không cần file ảnh
+const SIGN_ICON_PX = 64;
+function drawSignIcon(ctx, id) {
+  const S = SIGN_ICON_PX, c = S / 2;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (id === 'sign-light') {
+    ctx.fillStyle = '#10151c';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(c - 14, 3, 28, S - 6, 8);
+    ctx.fill();
+    ctx.stroke();
+    ['#ef4444', '#facc15', '#22c55e'].forEach((color, i) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(c, 15 + i * 17, 6.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  } else if (id === 'sign-stop') {
+    ctx.fillStyle = '#dc2626';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = Math.PI / 8 + i * Math.PI / 4;
+      ctx.lineTo(c + Math.cos(a) * 29, c + Math.sin(a) * 29);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 17px Arial';
+    ctx.fillText('STOP', c, c + 1);
+  } else if (id === 'sign-give_way') {
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#dc2626';
+    ctx.lineWidth = 8;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(7, 10);
+    ctx.lineTo(S - 7, 10);
+    ctx.lineTo(c, S - 7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (id === 'sign-camera') {
+    ctx.fillStyle = '#1d4ed8';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(4, 4, S - 8, S - 8, 10);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(12, 22, 40, 26);
+    ctx.fillRect(22, 15, 18, 8);
+    ctx.fillStyle = '#1d4ed8';
+    ctx.beginPath();
+    ctx.arc(c, 35, 9, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#dc2626';
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.arc(c, c, 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#111';
+    ctx.font = 'bold 25px Arial';
+    ctx.fillText(id.split('-')[2], c, c + 1);
+  }
+}
+if (map) map.on('styleimagemissing', function (e) {
+  if (e.id.indexOf('sign-') !== 0) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = SIGN_ICON_PX;
+  const ctx = canvas.getContext('2d');
+  drawSignIcon(ctx, e.id);
+  map.addImage(e.id, ctx.getImageData(0, 0, SIGN_ICON_PX, SIGN_ICON_PX), { pixelRatio: 2 });
+});
+
 function lookupSpeedLimit(lat, lon, heading) {
   lastPoint = { lat, lon, heading };
+  for (const key of tilesNear(lat, lon)) {
+    if (signTiles.has(key) || Date.now() < (signRetryAt.get(key) || 0)) continue;
+    loadSignTile(key);
+  }
   for (const key of tilesNear(lat, lon)) {
     if (roadTiles.has(key) || tilesLoading.has(key)) continue;
     if (Date.now() < (tileRetryAt.get(key) || 0)) continue;
