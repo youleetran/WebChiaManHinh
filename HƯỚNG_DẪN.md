@@ -42,7 +42,7 @@ pip install osmium
 python tools/build_roads.py vietnam-latest.osm.pbf data/roads
 ```
 Dữ liệu © OpenStreetMap, giấy phép ODbL: giữ dòng ghi nguồn ở góc bản đồ.
-- Nút 🔔 bật/tắt tiếng bíp. Cần chạm vào trang ít nhất một lần thì trình duyệt mới cho phát tiếng.
+- Nút 🔔 bật/tắt tiếng bíp. Bấm nút để bật sẽ kêu thử một lần. Trên iPhone, tiếng bíp lúc chạy quá tốc độ có thể không kêu, nên hãy nhìn cả cảnh báo đỏ trên màn hình.
 
 ## 5. Bản đồ dẫn đường
 - Khi có GPS, bản đồ tự nghiêng, xoay theo hướng xe chạy, phóng sát và hiện mũi tên xanh. Đây chỉ là bản đồ bám vị trí, chưa có chỉ đường theo lộ trình.

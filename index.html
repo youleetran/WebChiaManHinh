@@ -699,8 +699,13 @@ document.getElementById('btn-sound').addEventListener('click', function () {
   renderSoundButton();
   if (soundOn) beep();      // kêu thử để biết loa đang hoạt động
 });
-// Trình duyệt chỉ cho phát âm thanh sau lần chạm đầu tiên vào trang
-document.addEventListener('pointerdown', function () { ensureAudio(); }, { once: true });
+// Chỉ mở AudioContext lúc cần kêu rồi đóng ngay: để nó chạy song song với video
+// có thể làm tiếng video bị hụt trên iPhone.
+let audioCloseTimer = null;
+function closeAudio() {
+  if (audioCtx) audioCtx.close();
+  audioCtx = null;
+}
 
 function ensureAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -720,6 +725,8 @@ function beep() {
       o.connect(g).connect(audioCtx.destination);
       o.start(t + i * 0.25); o.stop(t + i * 0.25 + 0.22);
     }
+    clearTimeout(audioCloseTimer);
+    audioCloseTimer = setTimeout(closeAudio, 1000);
   } catch (e) {}
 }
 
@@ -1072,6 +1079,7 @@ document.getElementById('btn-playpause').addEventListener('click', () => {
 // Phóng to / thu nhỏ (bản đồ full màn hình, video phóng to trong nửa bên phải)
 function setFocus(pane) {
   const app = document.getElementById('app');
+  const mapResized = (pane === 'map') || app.classList.contains('focus-map');
   const isMap = (pane === 'map');
   const isVideo = (pane === 'video');
   app.classList.toggle('focus-map', isMap);
@@ -1083,7 +1091,7 @@ function setFocus(pane) {
   bv.textContent = isVideo ? '✕ Thu nhỏ' : '⛶ Phóng to';
   bv.title = isVideo ? 'Thu nhỏ' : 'Phóng to video';
   // cập nhật lại kích thước bản đồ sau khi đổi bố cục
-  setTimeout(function () { if (map) { map.resize(); moveCamera(true); } }, 150);
+  if (mapResized) setTimeout(function () { if (map) { map.resize(); moveCamera(true); } }, 150);
 }
 document.getElementById('btn-expand-map').addEventListener('click', function () {
   const app = document.getElementById('app');
