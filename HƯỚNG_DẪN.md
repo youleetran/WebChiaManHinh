@@ -44,16 +44,27 @@ python tools/build_roads.py vietnam-latest.osm.pbf data/roads
 Dữ liệu © OpenStreetMap, giấy phép ODbL: giữ dòng ghi nguồn ở góc bản đồ.
 - Nút 🔔 bật/tắt tiếng bíp. Cần chạm vào trang ít nhất một lần thì trình duyệt mới cho phát tiếng.
 
-## 5. Khi video không tìm/phát được
+## 5. Bản đồ dẫn đường
+- Khi có GPS, bản đồ tự nghiêng, xoay theo hướng xe chạy, phóng sát và hiện mũi tên xanh. Đây chỉ là bản đồ bám vị trí, chưa có chỉ đường theo lộ trình.
+- Kéo bản đồ để xem chỗ khác thì trang tạm thôi bám theo, sau 10 giây tự quay về xe. Nút **+ / −** ở góc dưới để phóng to, thu nhỏ.
+- GPS tự bật khi mở trang. Nếu lúc đó bị từ chối quyền vị trí, hãy cho phép rồi tải lại trang.
+- Bản đồ lấy từ [OpenFreeMap](https://openfreemap.org) (miễn phí, không cần tài khoản) nên cần mạng, và thiết bị phải hỗ trợ WebGL. Nếu không có WebGL, bản đồ sẽ báo lỗi.
+
+## 6. Khi video bị giật
+- Trang chỉ phát H.264 tối đa 480p (`VIDEO_MAX_HEIGHT`) và tải trước 45 giây (`VIDEO_BUFFER_S`), để đỡ nặng máy và chịu được lúc mạng yếu.
+- Video đi qua máy chủ Invidious công khai, mỗi đoạn mất khoảng 1–2 giây mới bắt đầu tải (đo ngày 03/11/2026 từ máy tính). Máy chủ quá tải thì video vẫn có thể dừng để tải.
+- Hình trên màn hình xe do điện thoại gửi sang. Nếu bản thân điện thoại phát mượt mà trên xe vẫn giật, thì nguyên nhân nằm ở đường truyền điện thoại–xe hoặc ứng dụng đang dùng để mở trang, sửa trang web không hết được.
+
+## 7. Khi video không tìm/phát được
 - Trang tự đổi máy chủ khi một máy chủ lỗi hoặc tải quá 25 giây, và tự lấy thêm máy chủ mới từ [api.invidious.io/instances.json](https://api.invidious.io/instances.json) khi mở trang.
 - ⚠️ Máy chủ Invidious công khai hay bị YouTube chặn. Lúc kiểm tra (03/11/2026) chỉ có **một** máy chủ công khai cho phép gọi API là `https://yt.chocolatemoo53.com`. Nếu nó hỏng và chưa có máy chủ mới thì không xem được video.
 - Video trực tiếp (live) không phát được nên không hiện trong kết quả tìm kiếm.
 
-## 6. Yêu thích và đã xem
+## 8. Yêu thích và đã xem
 - Bấm ☆ để lưu video. Xem lại ở tab **★ Yêu thích** và **Đã xem** (tối đa 50 video gần nhất). Dữ liệu lưu trong trình duyệt của thiết bị đang dùng.
 
-## 7. Lưu ý an toàn
+## 9. Lưu ý an toàn
 - ⚠️ **Không xem/nghịch màn hình khi đang lái.** Trang này để hành khách dùng hoặc khi xe dừng/đỗ.
-- Khi xe chạy trên 5 km/h, hình và danh sách tự ẩn, chỉ còn tiếng và nút điều khiển. Hình hiện lại sau khi xe dừng 3 giây.
-- Nút **👤 Hành khách** tắt việc ẩn hình, chỉ dùng khi hành khách đang xem. Tải lại trang thì nút tự về "tắt". Không có tín hiệu tốc độ từ GPS thì hình cũng không tự ẩn.
+- Khi xe chạy trên 5 km/h, hình và danh sách tự ẩn, chỉ còn tiếng và nút điều khiển. Hình hiện lại sau khi xe dừng 3 giây, hoặc khi GPS không báo tốc độ quá 10 giây.
+- Nút **👤 Hành khách** tắt việc ẩn hình, chỉ dùng khi hành khách đang xem. Trang nhớ lựa chọn này cho lần mở sau, nên nhớ tắt khi đi một mình. Không có tín hiệu tốc độ từ GPS thì hình cũng không tự ẩn.
 - Tốc độ hiển thị có độ trễ GPS nhỏ, không thay thế đồng hồ xe và biển báo.

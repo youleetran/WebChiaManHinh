@@ -5,10 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Xe Mazda — Bản đồ + Video</title>
 
-<!-- Leaflet (bản đồ) — chạy local để không bị ad blocker chặn CDN -->
-<link rel="stylesheet" href="leaflet.css" />
-<script src="leaflet.js"></script>
-<script>window.L || document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>');</script>
+<!-- MapLibre (bản đồ 3D) — chạy local để không bị ad blocker chặn CDN -->
+<link rel="stylesheet" href="maplibre-gl.css" />
+<script src="maplibre-gl.js"></script>
 <!-- dash.js để phát video DASH không quảng cáo -->
 <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
 
@@ -38,7 +37,10 @@
 
   /* ===== TRÁI: BẢN ĐỒ ===== */
   #map-pane { position: relative; flex: 1 1 50%; min-width: 0; border-right: 2px solid var(--border); }
-  #map { position: absolute; inset: 0; background: #1a1f26; }
+  #map { position: absolute; inset: 0; background: #23262f; }
+  #nav-arrow { width: 44px; height: 44px; }
+  #map .maplibregl-ctrl-attrib { font-size: 10px; background: rgba(14,17,22,0.7); color: var(--muted); }
+  #map .maplibregl-ctrl-attrib a { color: var(--muted); }
 
   #map-tools {
     position: absolute; z-index: 1000; top: 10px; right: 10px;
@@ -50,7 +52,7 @@
     border: 1px solid var(--border); border-radius: 10px;
     padding: 10px 14px; font-size: 18px; cursor: pointer;
   }
-  #btn-gps.active, #btn-follow.active, #btn-sound.active { background: var(--accent-green); color: #fff; }
+  #btn-sound.active { background: var(--accent-green); color: #fff; }
 
   #gps-status {
     position: absolute; z-index: 1000; left: 10px; bottom: 10px;
@@ -111,7 +113,6 @@
     background: var(--bg); color: var(--text); border: 1px solid var(--border);
     border-radius: 8px; cursor: pointer; font-weight: 600; white-space: nowrap;
   }
-  #music-pane .head span { color: var(--accent); }
 
   .search-bar { display: flex; gap: 8px; padding: 12px; }
   #search-input {
@@ -155,7 +156,6 @@
   .err { color: #ff9a9a; text-align: center; padding: 20px; font-size: 15px; }
 
   .head-buttons { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-  #btn-passenger.active { background: var(--accent-green); color: #fff; }
 
   .fav {
     flex: 0 0 auto; background: none; border: none; cursor: pointer;
@@ -170,22 +170,11 @@
   }
   #result-tabs button.active { color: var(--text); border-color: var(--accent); }
 
-  /* Xe đang chạy: ẩn hình và danh sách, chỉ còn tiếng + nút to */
-  #drive-panel { display: none; }
-  #app.driving #video,
-  #app.driving #music-pane .search-bar,
-  #app.driving #result-tabs,
-  #app.driving #results { display: none; }
-  #app.driving #drive-panel {
-    flex: 1; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 18px; padding: 12px;
-  }
-  .drive-note { color: var(--muted); font-size: 18px; text-align: center; }
-  .drive-buttons { display: flex; gap: 14px; }
+  .drive-buttons { display: flex; flex: 0 0 auto; gap: 8px; }
   .drive-buttons button {
-    width: 92px; height: 92px; font-size: 38px; cursor: pointer;
+    width: 56px; height: 48px; font-size: 24px; cursor: pointer;
     background: var(--bg); color: var(--text);
-    border: 1px solid var(--border); border-radius: 16px;
+    border: 1px solid var(--border); border-radius: 10px;
   }
 
   /* Chế độ phóng to */
@@ -228,8 +217,6 @@
     <div id="warning" class="hidden">⚠️ CHẠY QUÁ TỐC ĐỘ</div>
 
     <div id="map-tools">
-      <button class="map-btn" id="btn-gps" title="Lấy vị trí GPS">📍 GPS</button>
-      <button class="map-btn active" id="btn-follow" title="Bám theo vị trí">🎯 Bám theo</button>
       <button class="map-btn" id="btn-sound" title="Bật / tắt tiếng cảnh báo">🔔</button>
       <button class="map-btn" id="btn-expand-map" title="Phóng to bản đồ">⛶</button>
     </div>
@@ -239,10 +226,13 @@
   <!-- ================= PHẢI: NHẠC ================= -->
   <section id="music-pane">
     <div class="head">
-      <div>🎬 Xem video <span>không quảng cáo</span></div>
+      <div class="drive-buttons">
+        <button id="btn-prev" title="Video trước">⏮</button>
+        <button id="btn-playpause" title="Phát / Tạm dừng">⏯</button>
+        <button id="btn-next" title="Video sau">⏭</button>
+      </div>
       <div class="head-buttons">
-        <button class="expand-btn" id="btn-passenger" title="Bật khi hành khách xem: không ẩn hình lúc xe chạy">👤 Hành khách: tắt</button>
-        <button class="expand-btn" id="btn-expand-music" title="Phóng to bên nhạc/video">⛶ Phóng to</button>
+        <button class="expand-btn" id="btn-expand-music" title="Phóng to video">⛶ Phóng to</button>
       </div>
     </div>
 
@@ -261,15 +251,6 @@
         <button class="fav" id="np-fav" title="Yêu thích">☆</button>
       </div>
       <video id="video" controls playsinline></video>
-    </div>
-
-    <div id="drive-panel">
-      <div class="drive-note">🔊 Hình được ẩn khi xe đang chạy</div>
-      <div class="drive-buttons">
-        <button id="btn-prev" title="Video trước">⏮</button>
-        <button id="btn-playpause" title="Phát / Tạm dừng">⏯</button>
-        <button id="btn-next" title="Video sau">⏭</button>
-      </div>
     </div>
 
     <div id="result-tabs">
@@ -295,7 +276,16 @@ const INVIDIOUS_INSTANCES = [
 ];
 const INSTANCE_LIST_URL = 'https://api.invidious.io/instances.json';
 const ROAD_DATA_URL = 'data/roads/';
-const DEFAULT_CENTER = [16.05, 108.0]; // Việt Nam (khi chưa có GPS)
+const DEFAULT_CENTER = [108.0, 16.05]; // Việt Nam (khi chưa có GPS), thứ tự kinh độ, vĩ độ
+const MAP_TILES_URL = 'https://tiles.openfreemap.org/planet';
+const MAP_FONTS_URL = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
+const NAV_ZOOM = 17;           // mức phóng khi dẫn đường
+const NAV_MIN_ZOOM = 14;       // thu nhỏ quá mức này thì lần cập nhật GPS sau tự phóng lại
+const NAV_PITCH = 60;          // độ nghiêng bản đồ
+const NAV_TOP_PADDING = 0.45;  // phần trên màn hình dành cho đường phía trước, mũi tên nằm ở dưới
+const NAV_MOVE_MS = 1000;      // thời gian trượt giữa hai lần cập nhật GPS
+const FOLLOW_RESUME_MS = 10000; // kéo bản đồ xong, sau bấy nhiêu lâu thì tự quay về xe
+const HEADING_MIN_KMH = 4;     // chậm hơn mức này thì hướng GPS nhiễu, giữ hướng cũ
 
 // Số ước tính khi đường không có dữ liệu maxspeed. Chỉ để tham khảo, không kích hoạt cảnh báo.
 const ESTIMATED_LIMITS = {
@@ -312,42 +302,98 @@ const ROAD_MATCH_M = 35;      // đường xa hơn khoảng này thì không tí
 const LIMIT_STALE_MS = 30000;  // giữ giới hạn cũ tối đa bao lâu khi không khớp đường
 const VIDEO_START_TIMEOUT_MS = 25000; // quá thời gian này chưa có hình thì thử lại
 const VIDEO_TRIES_PER_SERVER = 3;     // mỗi máy chủ được thử tối đa bấy nhiêu lần cho một video
-const HIDE_VIDEO_KMH = 5;      // nhanh hơn mức này thì ẩn hình
-const SHOW_VIDEO_KMH = 3;      // chậm hơn mức này đủ 3 giây thì hiện lại
+const VIDEO_MAX_HEIGHT = 480;         // nửa màn hình xe không cần nét hơn, tải nhẹ thì đỡ giật
+const VIDEO_BUFFER_S = 45;            // tải trước bấy nhiêu giây để đỡ qua lúc mạng yếu
 
 /* ============================================================
    BẢN ĐỒ
    ============================================================ */
+// Kiểu bản đồ tối giống app dẫn đường, chỉ vẽ những lớp cần để đỡ nặng máy
+const ROAD_CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service'];
+const MAIN_ROAD_CLASSES = ['motorway', 'trunk', 'primary'];
+const isMainRoad = ['match', ['get', 'class'], MAIN_ROAD_CLASSES, true, false];
+function roadWidth(scale) {
+  const byClass = (main, other) => ['case', isMainRoad, main * scale, other * scale];
+  return ['interpolate', ['exponential', 1.5], ['zoom'], 10, byClass(1.5, 0.5), 14, byClass(5, 2), 18, byClass(30, 16)];
+}
+const NAV_MAP_STYLE = {
+  version: 8,
+  glyphs: MAP_FONTS_URL,
+  sources: { osm: { type: 'vector', url: MAP_TILES_URL } },
+  layers: [
+    { id: 'background', type: 'background', paint: { 'background-color': '#23262f' } },
+    { id: 'water', type: 'fill', source: 'osm', 'source-layer': 'water', paint: { 'fill-color': '#161a24' } },
+    { id: 'road-edge', type: 'line', source: 'osm', 'source-layer': 'transportation',
+      filter: ['in', ['get', 'class'], ['literal', ROAD_CLASSES]],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#6a6e7c', 'line-width': roadWidth(1.25) } },
+    { id: 'road', type: 'line', source: 'osm', 'source-layer': 'transportation',
+      filter: ['in', ['get', 'class'], ['literal', ROAD_CLASSES]],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': ['case', isMainRoad, '#565a68', '#3c3f4b'], 'line-width': roadWidth(1) } },
+    { id: 'building', type: 'fill-extrusion', source: 'osm', 'source-layer': 'building', minzoom: 15,
+      paint: {
+        'fill-extrusion-color': '#343746',
+        'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6],
+        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+        'fill-extrusion-opacity': 0.9
+      } },
+    { id: 'road-name', type: 'symbol', source: 'osm', 'source-layer': 'transportation_name', minzoom: 12,
+      layout: {
+        'symbol-placement': 'line',
+        'text-field': ['coalesce', ['get', 'name'], ['get', 'ref'], ''],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 12, 11, 17, 16],
+        'text-pitch-alignment': 'viewport',
+        'symbol-spacing': 220
+      },
+      paint: { 'text-color': '#eceef4', 'text-halo-color': '#23262f', 'text-halo-width': 1.5 } },
+    { id: 'place-name', type: 'symbol', source: 'osm', 'source-layer': 'place', maxzoom: 14,
+      layout: { 'text-field': ['coalesce', ['get', 'name'], ''], 'text-font': ['Noto Sans Regular'], 'text-size': 14 },
+      paint: { 'text-color': '#aeb3c2', 'text-halo-color': '#23262f', 'text-halo-width': 1.5 } }
+  ]
+};
+
 let map = null;
-if (typeof L === 'undefined') {
-  document.getElementById('map').innerHTML =
-    '<div style="color:#ff9a9a;padding:20px;font-size:16px;">⚠️ Không tải được thư viện bản đồ. Kiểm tra mạng rồi tải lại trang (Ctrl+F5).</div>';
-} else {
-  map = L.map('map', { zoomControl: false }).setView(DEFAULT_CENTER, 6);
-  map.attributionControl.setPrefix(false).addAttribution('© OpenStreetMap');  // giấy phép dữ liệu yêu cầu ghi nguồn
-  L.control.zoom({ position: 'bottomright' }).addTo(map);  // góc trên trái đã có bảng tốc độ
-  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-  let tileErrors = 0;
-  osm.on('tileerror', function () {
-    tileErrors++;
-    if (tileErrors === 4) {
-      osm.remove();
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-    }
+try {
+  map = new maplibregl.Map({
+    container: 'map',
+    style: NAV_MAP_STYLE,
+    center: DEFAULT_CENTER,
+    zoom: 5,
+    pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),  // đủ nét, đỡ nặng khi đang phát video
+    attributionControl: false
   });
+  // giấy phép dữ liệu yêu cầu ghi nguồn
+  map.addControl(new maplibregl.AttributionControl({ compact: false }), 'bottom-right');
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+} catch (e) {
+  map = null;
+  document.getElementById('map').innerHTML =
+    '<div style="color:#ff9a9a;padding:20px;font-size:16px;">⚠️ Không mở được bản đồ (thiết bị cần hỗ trợ WebGL). Giới hạn tốc độ vẫn hoạt động nếu có GPS.</div>';
 }
 
-let posMarker = null;       // chấm vị trí hiện tại (GPS)
+let navArrow = null;        // mũi tên vị trí hiện tại (GPS)
+let carPos = null;          // vị trí và hướng mới nhất từ GPS
 let manualMarker = null;    // vị trí đặt tay
 let follow = true;          // tự động bám theo GPS
 let speedLimit = null;      // giới hạn tốc độ đã biết chắc (số ước tính không tính)
 let lastBeep = 0;
 
-// Nút bám theo
-document.getElementById('btn-follow').addEventListener('click', function () {
-  follow = !follow;
-  this.classList.toggle('active', follow);
-});
+// Kéo bản đồ để xem chỗ khác thì tạm thôi bám theo, một lúc sau tự quay về xe
+let followTimer = null;
+if (map) {
+  map.on('dragstart', function () {
+    follow = false;
+    clearTimeout(followTimer);
+  });
+  map.on('dragend', function () {
+    followTimer = setTimeout(function () {
+      follow = true;
+      moveCamera(false);
+    }, FOLLOW_RESUME_MS);
+  });
+}
 
 /* ---------- GPS ---------- */
 function setStatus(msg) { document.getElementById('gps-status').textContent = msg; }
@@ -380,8 +426,9 @@ let lastFix = null;
 let lastHeading = null;
 function readMotion(pos) {
   const c = pos.coords;
-  let kmh = (c.speed != null) ? c.speed * 3.6 : null;
-  let heading = (c.heading != null && !isNaN(c.heading)) ? c.heading : null;
+  // Có máy báo số âm thay cho "không biết"
+  let kmh = (c.speed != null && c.speed >= 0) ? c.speed * 3.6 : null;
+  let heading = (c.heading != null && c.heading >= 0) ? c.heading : null;
   if (lastFix) {
     const dt = (pos.timestamp - lastFix.time) / 1000;
     const dist = distanceM(lastFix.lat, lastFix.lon, c.latitude, c.longitude);
@@ -391,7 +438,7 @@ function readMotion(pos) {
   if (!lastFix || distanceM(lastFix.lat, lastFix.lon, c.latitude, c.longitude) >= 5 || pos.timestamp - lastFix.time > 5000) {
     lastFix = { lat: c.latitude, lon: c.longitude, time: pos.timestamp };
   }
-  if (heading != null) lastHeading = heading;
+  if (heading != null && !(kmh != null && kmh < HEADING_MIN_KMH)) lastHeading = heading;
   return { kmh, heading: lastHeading };
 }
 
@@ -400,34 +447,66 @@ function onPosition(pos) {
   const lat = pos.coords.latitude, lon = pos.coords.longitude;
   const { kmh, heading } = readMotion(pos);
 
-  if (!posMarker) {
-    posMarker = L.circleMarker([lat, lon], {
-      radius: 9, color: '#fff', weight: 2, fillColor: '#2ea043', fillOpacity: 1
-    }).addTo(map);
+  const moved = !carPos || distanceM(carPos.lat, carPos.lon, lat, lon) >= 1 || carPos.heading !== heading;
+  carPos = { lat, lon, heading };
+  if (!navArrow) navArrow = createNavArrow();
+  if (follow) {
+    if (moved) moveCamera(false);     // đứng yên thì không vẽ lại, đỡ nặng máy
   } else {
-    posMarker.setLatLng([lat, lon]);
+    placeArrow(lon, lat, heading || 0);
   }
-  if (follow) map.setView([lat, lon], Math.max(map.getZoom(), 15));
 
   setStatus('GPS: ' + lat.toFixed(5) + ', ' + lon.toFixed(5));
   lookupSpeedLimit(lat, lon, heading);
   renderCurrentSpeed(kmh);
-  updateDriveMode(kmh);
 }
+
+function createNavArrow() {
+  const el = document.createElement('div');
+  el.id = 'nav-arrow';
+  el.innerHTML = '<svg viewBox="0 0 44 44" width="44" height="44">' +
+    '<path d="M22 3 L39 39 L22 31 L5 39 Z" fill="#2f8cff" stroke="#fff" stroke-width="3" stroke-linejoin="round"/></svg>';
+  return new maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'map' })
+    .setLngLat([carPos.lon, carPos.lat]).addTo(map);
+}
+function placeArrow(lon, lat, rotation) {
+  navArrow.setLngLat([lon, lat]).setRotation(rotation);
+}
+
+// Đưa camera về sau xe: nghiêng, xoay theo hướng chạy, xe nằm phía dưới màn hình
+function moveCamera(instant) {
+  if (!map || !follow || !carPos) return;
+  const camera = {
+    center: [carPos.lon, carPos.lat],
+    pitch: NAV_PITCH,
+    padding: { top: map.getContainer().clientHeight * NAV_TOP_PADDING },
+    duration: instant ? 0 : NAV_MOVE_MS,
+    easing: function (t) { return t; },
+    essential: true
+  };
+  if (carPos.heading != null) camera.bearing = carPos.heading;
+  if (map.getZoom() < NAV_MIN_ZOOM) {
+    camera.zoom = NAV_ZOOM;
+    camera.duration = 0;
+  }
+  map.easeTo(camera);
+}
+// Mũi tên trượt cùng camera nên luôn đứng giữa và chỉ thẳng lên trên
+if (map) map.on('move', function () {
+  if (!follow || !navArrow) return;
+  const c = map.getCenter();
+  placeArrow(c.lng, c.lat, map.getBearing());
+});
 
 function onGPSError(err) {
   setStatus('⚠️ Không lấy được GPS — chạm vào bản đồ để đặt vị trí');
 }
 
-document.getElementById('btn-gps').addEventListener('click', startGPS);
-
 /* ---------- Đặt vị trí tay (chạm vào bản đồ) ---------- */
 if (map) map.on('click', function (e) {
-  const { lat, lng } = e.latlng;
-  if (manualMarker) manualMarker.setLatLng([lat, lng]);
-  else manualMarker = L.circleMarker([lat, lng], {
-    radius: 8, color: '#fff', weight: 2, fillColor: '#ff4d4d', fillOpacity: 1
-  }).addTo(map);
+  const { lat, lng } = e.lngLat;
+  if (manualMarker) manualMarker.setLngLat([lng, lat]);
+  else manualMarker = new maplibregl.Marker({ color: '#ff4d4d' }).setLngLat([lng, lat]).addTo(map);
   setStatus('Vị trí đặt tay: ' + lat.toFixed(5) + ', ' + lng.toFixed(5));
   lastLimitAt = 0;             // đặt tay là nhảy sang chỗ khác, không giữ số cũ
   currentWayId = null;
@@ -900,6 +979,13 @@ function stopPlayer() {
   if (dashPlayer) { try { dashPlayer.reset(); } catch (e) {} dashPlayer = null; }
 }
 
+// Máy yếu và mạng 4G chỉ cần H.264 tới 480p: giải mã bằng phần cứng, tải nhẹ.
+// VP9 và AV1 có thể phải giải mã bằng CPU, gây giật.
+function isLightTrack(rep) {
+  if (String(rep.mimeType).indexOf('audio') === 0) return /mp4a/.test(rep.codecs);
+  return /avc1/.test(rep.codecs) && rep.height <= VIDEO_MAX_HEIGHT;
+}
+
 function playVideo(s, item, base, failCounts, token) {
   stopPlayer();
 
@@ -921,6 +1007,16 @@ function playVideo(s, item, base, failCounts, token) {
   if (!s.dashUrl) { failOver(); return; }
   try {
     dashPlayer = dashjs.MediaPlayer().create();
+    dashPlayer.registerCustomCapabilitiesFilter(isLightTrack);
+    dashPlayer.updateSettings({
+      streaming: {
+        buffer: {
+          stableBufferTime: VIDEO_BUFFER_S,
+          bufferTimeAtTopQuality: VIDEO_BUFFER_S,
+          bufferTimeAtTopQualityLongForm: VIDEO_BUFFER_S
+        }
+      }
+    });
     startupTimer = setTimeout(failOver, VIDEO_START_TIMEOUT_MS);
     videoEl.addEventListener('canplay', function () {
       if (token === playToken) clearTimeout(startupTimer);
@@ -966,38 +1062,6 @@ videoEl.addEventListener('timeupdate', function () {
 });
 videoEl.addEventListener('pause', saveState);
 
-/* ---------- Ẩn hình khi xe chạy ---------- */
-let carMoving = false;
-let stoppedSince = 0;
-let passengerMode = false;
-
-function applyDriveMode() {
-  document.getElementById('app').classList.toggle('driving', carMoving && !passengerMode);
-}
-function updateDriveMode(kmh) {
-  if (kmh == null) return;
-  if (kmh > HIDE_VIDEO_KMH) {
-    stoppedSince = 0;
-    carMoving = true;
-    applyDriveMode();
-  } else if (kmh <= SHOW_VIDEO_KMH && !stoppedSince) {
-    stoppedSince = Date.now();
-  }
-}
-// Kiểm tra định kỳ vì lúc xe đứng yên GPS có thể ngừng gửi vị trí mới
-setInterval(function () {
-  if (carMoving && stoppedSince && Date.now() - stoppedSince > 3000) {
-    carMoving = false;
-    applyDriveMode();
-  }
-}, 1000);
-
-document.getElementById('btn-passenger').addEventListener('click', function () {
-  passengerMode = !passengerMode;
-  this.classList.toggle('active', passengerMode);
-  this.textContent = '👤 Hành khách: ' + (passengerMode ? 'bật' : 'tắt');
-  applyDriveMode();
-});
 document.getElementById('btn-prev').addEventListener('click', () => playFromQueue(queueIndex - 1));
 document.getElementById('btn-next').addEventListener('click', () => playFromQueue(queueIndex + 1));
 document.getElementById('btn-playpause').addEventListener('click', () => {
@@ -1019,7 +1083,7 @@ function setFocus(pane) {
   bv.textContent = isVideo ? '✕ Thu nhỏ' : '⛶ Phóng to';
   bv.title = isVideo ? 'Thu nhỏ' : 'Phóng to video';
   // cập nhật lại kích thước bản đồ sau khi đổi bố cục
-  setTimeout(function () { if (map) map.invalidateSize(); }, 150);
+  setTimeout(function () { if (map) { map.resize(); moveCamera(true); } }, 150);
 }
 document.getElementById('btn-expand-map').addEventListener('click', function () {
   const app = document.getElementById('app');
