@@ -321,7 +321,9 @@ const NAV_ZOOM = 17;           // mức phóng khi dẫn đường
 const NAV_MIN_ZOOM = 14;       // thu nhỏ quá mức này thì lần cập nhật GPS sau tự phóng lại
 const NAV_PITCH = 60;          // độ nghiêng bản đồ
 const NAV_TOP_PADDING = 0.45;  // phần trên màn hình dành cho đường phía trước, mũi tên nằm ở dưới
-const NAV_MOVE_MS = 1000;      // thời gian trượt giữa hai lần cập nhật GPS
+const NAV_MOVE_MIN_MS = 300;    // thời gian trượt giữa hai lần cập nhật GPS: bằng khoảng cách giữa hai lần,
+const NAV_MOVE_MAX_MS = 3000;  // trong giới hạn này, để xe trượt liền mạch chứ không chạy rồi dừng
+const HEADING_MIN_M = 8;       // máy không báo hướng thì tự tính sau mỗi quãng dài chừng này
 const FOLLOW_RESUME_MS = 10000; // kéo bản đồ xong, sau bấy nhiêu lâu thì tự quay về xe
 const HEADING_MIN_KMH = 4;     // chậm hơn mức này thì hướng GPS nhiễu, giữ hướng cũ
 
@@ -422,19 +424,22 @@ let follow = true;          // tự động bám theo GPS
 let speedLimit = null;      // giới hạn tốc độ đã biết chắc (số ước tính không tính)
 let lastBeep = 0;
 
-// Kéo bản đồ để xem chỗ khác thì tạm thôi bám theo, một lúc sau tự quay về xe
+// Kéo bản đồ để xem chỗ khác thì tạm thôi bám theo, một lúc sau tự quay về xe.
+// Hẹn giờ ngay từ lúc bắt đầu kéo, vì trên xe có thể không nhận được lúc thả tay.
 let followTimer = null;
+function resumeFollowLater() {
+  clearTimeout(followTimer);
+  followTimer = setTimeout(function () {
+    follow = true;
+    moveCamera(false);
+  }, FOLLOW_RESUME_MS);
+}
 if (map) {
   map.on('dragstart', function () {
     follow = false;
-    clearTimeout(followTimer);
+    resumeFollowLater();
   });
-  map.on('dragend', function () {
-    followTimer = setTimeout(function () {
-      follow = true;
-      moveCamera(false);
-    }, FOLLOW_RESUME_MS);
-  });
+  map.on('dragend', resumeFollowLater);
 }
 
 /* ---------- GPS ---------- */
@@ -466,16 +471,31 @@ function bearingDeg(lat1, lon1, lat2, lon2) {
 // Máy không báo tốc độ / hướng thì tự tính từ hai vị trí liên tiếp
 let lastFix = null;
 let lastHeading = null;
+let headingFix = null;      // điểm mốc để tự tính hướng
+let gpsCount = 0;           // các số dưới đây chỉ để xem trong chế độ ?debug
+let gpsNoHeading = 0;
+let gpsGapS = 0;
+let gpsLastAt = 0;
+let gpsForcedDraws = 0;
+let glLost = 0;
 function readMotion(pos) {
   const c = pos.coords;
   // Có máy báo số âm thay cho "không biết"
   let kmh = (c.speed != null && c.speed >= 0) ? c.speed * 3.6 : null;
   let heading = (c.heading != null && c.heading >= 0) ? c.heading : null;
+  gpsCount++;
+  if (heading == null) gpsNoHeading++;
+  gpsGapS = gpsLastAt ? (pos.timestamp - gpsLastAt) / 1000 : 0;
+  gpsLastAt = pos.timestamp;
   if (lastFix) {
     const dt = (pos.timestamp - lastFix.time) / 1000;
     const dist = distanceM(lastFix.lat, lastFix.lon, c.latitude, c.longitude);
     if (kmh == null && dt >= 1 && c.accuracy <= 30) kmh = (dist < 5) ? 0 : dist / dt * 3.6;
-    if (heading == null && dist >= 10) heading = bearingDeg(lastFix.lat, lastFix.lon, c.latitude, c.longitude);
+  }
+  if (!headingFix) headingFix = { lat: c.latitude, lon: c.longitude };
+  if (c.accuracy <= 30 && distanceM(headingFix.lat, headingFix.lon, c.latitude, c.longitude) >= HEADING_MIN_M) {
+    if (heading == null) heading = bearingDeg(headingFix.lat, headingFix.lon, c.latitude, c.longitude);
+    headingFix = { lat: c.latitude, lon: c.longitude };
   }
   if (!lastFix || distanceM(lastFix.lat, lastFix.lon, c.latitude, c.longitude) >= 5 || pos.timestamp - lastFix.time > 5000) {
     lastFix = { lat: c.latitude, lon: c.longitude, time: pos.timestamp };
@@ -493,7 +513,7 @@ function onPosition(pos) {
   carPos = { lat, lon, heading };
   if (!navArrow) navArrow = createNavArrow();
   if (follow) {
-    if (moved) moveCamera(false);     // đứng yên thì không vẽ lại, đỡ nặng máy
+    if (moved || !frameSeen) moveCamera(false);     // đứng yên thì không vẽ lại, đỡ nặng máy
   } else {
     placeArrow(lon, lat, heading || 0);
   }
@@ -516,13 +536,21 @@ function placeArrow(lon, lat, rotation) {
 }
 
 // Đưa camera về sau xe: nghiêng, xoay theo hướng chạy, xe nằm phía dưới màn hình
+// iPhone có thể ngừng vẽ khung hình (requestAnimationFrame) trong khi GPS và video vẫn chạy,
+// ví dụ khi màn hình điện thoại tắt. Bản đồ trượt nhờ các khung hình đó nên sẽ đứng im.
+// Từ lần GPS trước mà chưa có khung hình nào thì nhảy thẳng tới vị trí mới và tự vẽ.
+let frameSeen = true;
+let lastCameraAt = 0;
 function moveCamera(instant) {
   if (!map || !follow || !carPos) return;
+  const now = Date.now();
+  const gap = Math.max(NAV_MOVE_MIN_MS, Math.min(NAV_MOVE_MAX_MS, now - lastCameraAt));
+  lastCameraAt = now;
   const camera = {
     center: [carPos.lon, carPos.lat],
     pitch: NAV_PITCH,
     padding: { top: map.getContainer().clientHeight * NAV_TOP_PADDING, bottom: 0, left: 0, right: 0 },
-    duration: instant ? 0 : NAV_MOVE_MS,
+    duration: instant ? 0 : gap,
     easing: function (t) { return t; },
     essential: true
   };
@@ -531,13 +559,24 @@ function moveCamera(instant) {
     camera.zoom = NAV_ZOOM;
     camera.duration = 0;
   }
-  map.easeTo(camera);
+  const framesRunning = frameSeen;
+  frameSeen = false;
+  requestAnimationFrame(function () { frameSeen = true; });
+  if (framesRunning) {
+    map.easeTo(camera);
+  } else {
+    gpsForcedDraws++;
+    map.jumpTo(camera);
+    map.redraw();
+  }
 }
 // Khung bản đồ đổi kích thước thì cập nhật ngay, nếu không mũi tên sẽ lệch khỏi giữa
 if (map) new ResizeObserver(function () {
   map.resize();
   moveCamera(true);
 }).observe(map.getContainer());
+
+if (map) map.on('webglcontextlost', function () { glLost++; });
 
 // Mũi tên trượt cùng camera nên luôn đứng giữa và chỉ thẳng lên trên
 if (map) map.on('move', function () {
@@ -1375,7 +1414,10 @@ if (location.search.includes('debug') && window.visualViewport) {
   setInterval(function () {
     const v = window.visualViewport;
     debugEl.textContent = innerWidth + '×' + innerHeight + ' vv ' + Math.round(v.width) + '×' + Math.round(v.height) +
-      ' scale ' + v.scale.toFixed(2) + ' lech ' + Math.round(v.offsetLeft) + ',' + Math.round(v.offsetTop) + ' cuon ' + Math.round(scrollX);
+      ' scale ' + v.scale.toFixed(2) + ' lech ' + Math.round(v.offsetLeft) + ',' + Math.round(v.offsetTop) + ' cuon ' + Math.round(scrollX) +
+      ' | GPS ' + gpsCount + ' lan, ' + gpsNoHeading + ' khong huong, cach ' + gpsGapS.toFixed(1) + 's, xoay ' +
+      (map ? Math.round(map.getBearing()) : '-') + ', bam ' + (follow ? 'co' : 'khong') +
+      ', tu ve ' + gpsForcedDraws + ', mat WebGL ' + glLost;
   }, 500);
 }
 
