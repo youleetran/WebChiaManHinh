@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta id="viewport-meta" name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Xe Mazda — Bản đồ + Video</title>
 
 <!-- MapLibre (bản đồ 3D) — chạy local để không bị ad blocker chặn CDN -->
@@ -512,7 +512,7 @@ function moveCamera(instant) {
   const camera = {
     center: [carPos.lon, carPos.lat],
     pitch: NAV_PITCH,
-    padding: { top: map.getContainer().clientHeight * NAV_TOP_PADDING },
+    padding: { top: map.getContainer().clientHeight * NAV_TOP_PADDING, bottom: 0, left: 0, right: 0 },
     duration: instant ? 0 : NAV_MOVE_MS,
     easing: function (t) { return t; },
     essential: true
@@ -524,6 +524,12 @@ function moveCamera(instant) {
   }
   map.easeTo(camera);
 }
+// Khung bản đồ đổi kích thước thì cập nhật ngay, nếu không mũi tên sẽ lệch khỏi giữa
+if (map) new ResizeObserver(function () {
+  map.resize();
+  moveCamera(true);
+}).observe(map.getContainer());
+
 // Mũi tên trượt cùng camera nên luôn đứng giữa và chỉ thẳng lên trên
 if (map) map.on('move', function () {
   if (!follow || !navArrow) return;
@@ -1151,7 +1157,6 @@ document.getElementById('btn-playpause').addEventListener('click', () => {
 // Phóng to / thu nhỏ (bản đồ full màn hình, video phóng to trong nửa bên phải)
 function setFocus(pane) {
   const app = document.getElementById('app');
-  const mapResized = (pane === 'map') || app.classList.contains('focus-map');
   const isMap = (pane === 'map');
   const isVideo = (pane === 'video');
   app.classList.toggle('focus-map', isMap);
@@ -1163,8 +1168,6 @@ function setFocus(pane) {
   bm.title = isMap ? 'Thu nhỏ' : 'Phóng to bản đồ';
   bv.textContent = isVideo ? '✕ Thu nhỏ' : '⛶ Phóng to';
   bv.title = isVideo ? 'Thu nhỏ' : 'Phóng to video';
-  // cập nhật lại kích thước bản đồ sau khi đổi bố cục
-  if (mapResized) setTimeout(function () { if (map) { map.resize(); moveCamera(true); } }, 150);
 }
 document.getElementById('btn-expand-map').addEventListener('click', function () {
   const app = document.getElementById('app');
@@ -1179,6 +1182,17 @@ document.getElementById('btn-expand-music').addEventListener('click', function (
 const searchInput = document.getElementById('search-input');
 const searchHistoryEl = document.getElementById('search-history');
 
+// Trên iPhone, đưa con trỏ vào ô nhập có thể làm trang phóng to và lệch bố cục, nên đưa về như cũ.
+function resetPageZoom() {
+  const meta = document.getElementById('viewport-meta');
+  const normal = meta.getAttribute('content');
+  meta.setAttribute('content', 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1');
+  setTimeout(function () { meta.setAttribute('content', normal); }, 100);
+  window.scrollTo(0, 0);
+  document.documentElement.scrollLeft = 0;
+  document.body.scrollLeft = 0;
+}
+
 function runSearch(q) {
   const recent = loadList(SEARCH_HISTORY_KEY).filter(x => x.toLowerCase() !== q.toLowerCase());
   saveList(SEARCH_HISTORY_KEY, [q].concat(recent).slice(0, SEARCH_HISTORY_MAX));
@@ -1187,12 +1201,16 @@ function runSearch(q) {
   setListOpen(true);
   doSearch(q);
 }
+// Bỏ dấu để gõ "nhac" vẫn ra "Nhạc"
+function plainText(s) {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase();
+}
 // Tìm gần đây xếp trước, sau đó là các gợi ý có sẵn; đang gõ thì lọc theo chữ đã gõ
 function renderSearchHistory(typed) {
   const seen = new Set();
   const items = loadList(SEARCH_HISTORY_KEY).concat(DEFAULT_SEARCHES).filter(x => {
     const key = x.toLowerCase();
-    if (seen.has(key) || !key.includes(typed)) return false;
+    if (seen.has(key) || !plainText(x).includes(typed)) return false;
     seen.add(key);
     return true;
   });
@@ -1205,9 +1223,19 @@ function renderSearchHistory(typed) {
   });
   searchHistoryEl.classList.toggle('show', items.length > 0);
 }
-searchInput.addEventListener('focus', () => renderSearchHistory(''));
-searchInput.addEventListener('input', () => renderSearchHistory(searchInput.value.trim().toLowerCase()));
-searchInput.addEventListener('blur', () => searchHistoryEl.classList.remove('show'));
+searchInput.addEventListener('input', () => renderSearchHistory(plainText(searchInput.value.trim())));
+searchInput.addEventListener('focus', () => {
+  renderSearchHistory('');
+  setTimeout(resetPageZoom, 300);   // đợi iPhone phóng to xong rồi mới đưa về
+});
+searchInput.addEventListener('blur', () => {
+  searchHistoryEl.classList.remove('show');
+  resetPageZoom();
+});
+// iPhone không tự bỏ con trỏ khỏi ô nhập khi chạm ra ngoài
+document.addEventListener('pointerdown', (e) => {
+  if (e.target !== searchInput && !searchHistoryEl.contains(e.target)) searchInput.blur();
+});
 // Giữ ô tìm không mất focus khi bấm vào lịch sử, nếu không danh sách đóng trước khi nhận được cú bấm
 searchHistoryEl.addEventListener('pointerdown', e => e.preventDefault());
 searchHistoryEl.addEventListener('mousedown', e => e.preventDefault());
@@ -1215,6 +1243,7 @@ searchHistoryEl.addEventListener('mousedown', e => e.preventDefault());
 document.getElementById('search-btn').addEventListener('click', () => {
   const q = searchInput.value.trim();
   if (q) runSearch(q);
+  else searchInput.focus();
 });
 document.getElementById('search-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('search-btn').click();

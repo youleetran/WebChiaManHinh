@@ -64,7 +64,7 @@ Dữ liệu © OpenStreetMap, giấy phép ODbL: giữ dòng ghi nguồn ở gó
 ## 8. Yêu thích và đã xem
 - Khi đang phát, video chiếm hết nửa bên phải. Rê chuột hoặc chạm vào video thì tên bài hiện nhỏ trong 3 giây, nút ☆ nằm ở đó.
 - Bấm **☰ Danh sách** hoặc tìm kiếm để xem danh sách, video thu nhỏ ở góc. Chạm vào video nhỏ để quay lại. Nút ▲ ▼ để cuộn danh sách.
-- Chạm vào ô tìm sẽ hiện các tìm kiếm gần đây và gợi ý có sẵn.
+- Chạm vào ô tìm là gõ được ngay, đồng thời xổ xuống các tìm kiếm gần đây và gợi ý có sẵn để chọn.
 - Bấm ☆ để lưu video. Xem lại ở tab **★ Yêu thích** và **Đã xem** (tối đa 50 video gần nhất). Dữ liệu lưu trong trình duyệt của thiết bị đang dùng.
 
 ## 9. Lưu ý an toàn
