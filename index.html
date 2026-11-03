@@ -114,11 +114,15 @@
   }
 
   .search-bar { position: relative; display: flex; gap: 6px; padding: 6px 8px; }
+  /* iPhone trên xe hiển thị trang ở mức 70% và tự phóng to nếu chữ trong ô nhập dưới khoảng 23px.
+     Nên giữ cỡ chữ 26px rồi thu nhỏ cả ô bằng transform, nhìn như chữ 17px. */
+  .search-field { flex: 1; min-width: 0; height: 36px; }
   #search-input {
-    /* Chữ to để iPhone không tự phóng to trang khi chạm vào ô nhập (chữ nhỏ là bị phóng) */
-    flex: 1; min-width: 0; font-size: 26px; padding: 2px 10px;
+    display: block; width: 153.85%; height: 153.85%;
+    transform: scale(0.65); transform-origin: 0 0;
+    font-size: 26px; padding: 2px 15px;
     background: var(--bg); color: var(--text);
-    border: 1px solid var(--border); border-radius: 10px; outline: none;
+    border: 1.5px solid var(--border); border-radius: 15px; outline: none;
   }
   #search-btn {
     font-size: 16px; padding: 8px 14px; border: none; border-radius: 10px;
@@ -268,7 +272,7 @@
     </div>
 
     <div class="search-bar">
-      <input id="search-input" type="text" placeholder="Tìm video / bài hát…" />
+      <div class="search-field"><input id="search-input" type="text" placeholder="Tìm video / bài hát…" /></div>
       <button id="search-btn">Tìm</button>
       <div id="search-history"></div>
     </div>
@@ -974,7 +978,26 @@ function renderResults(items, emptyText) {
 function playFromQueue(i) {
   if (i < 0 || i >= queue.length) return;
   queueIndex = i;
+  pendingResumeTime = 0;      // chuyển bài thì không tua tới chỗ đang xem dở của bài cũ
   playSong(queue[i]);
+}
+
+// step = 1 là bài sau, -1 là bài trước
+function changeTrack(step) {
+  // Mở lại trang và phát tiếp video xem dở thì chưa có hàng đợi, lấy danh sách đang hiện
+  if (!queue.length) {
+    queue = lastSearchItems.slice();
+    queueIndex = -1;
+  }
+  if (step < 0 && queueIndex <= 0) {
+    videoEl.currentTime = 0;
+    return;
+  }
+  if (!queue.length) return;
+  let i = (queueIndex + step) % queue.length;   // hết danh sách thì quay lại bài đầu
+  const id = queue[i].videoId || extractVideoId(queue[i].url);
+  if (id === currentVideoId && queue.length > 1) i = (i + step + queue.length) % queue.length;
+  playFromQueue(i);
 }
 
 function showPlayError(msg) {
@@ -1094,6 +1117,34 @@ function renderNowPlaying(info) {
   document.getElementById('np-thumb').src = info.thumb || '';
   renderRightPane();
   showNowPlayingInfo();
+  updateMediaSession(info);
+}
+
+/* ---------- Nút trên vô lăng, màn hình khóa ----------
+   Các nút này do iPhone gửi tới ứng dụng đang phát qua Media Session. */
+function updateMediaSession(info) {
+  if (!('mediaSession' in navigator) || !window.MediaMetadata) return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: info.title || '',
+    artist: info.artist || '',
+    artwork: info.thumb ? [{ src: info.thumb }] : []
+  });
+}
+if ('mediaSession' in navigator) {
+  const mediaActions = {
+    nexttrack: () => changeTrack(1),
+    previoustrack: () => changeTrack(-1),
+    play: () => videoEl.play().catch(function () {}),
+    pause: () => videoEl.pause(),
+    // Để trống thì iPhone hiện nút chuyển bài thay vì nút tua
+    seekbackward: null,
+    seekforward: null
+  };
+  Object.keys(mediaActions).forEach(action => {
+    try { navigator.mediaSession.setActionHandler(action, mediaActions[action]); } catch (e) {}
+  });
+  videoEl.addEventListener('play', () => { navigator.mediaSession.playbackState = 'playing'; });
+  videoEl.addEventListener('pause', () => { navigator.mediaSession.playbackState = 'paused'; });
 }
 
 /* ---------- Nửa bên phải: xem video hoặc xem danh sách ---------- */
@@ -1137,7 +1188,7 @@ function markPlaying(videoId) {
 // Tự động phát video kế tiếp + lưu trạng thái
 videoEl.addEventListener('ended', () => {
   saveState();
-  playFromQueue(queueIndex + 1);
+  changeTrack(1);
 });
 videoEl.addEventListener('timeupdate', function () {
   const now = Date.now();
@@ -1148,8 +1199,8 @@ videoEl.addEventListener('timeupdate', function () {
 });
 videoEl.addEventListener('pause', saveState);
 
-document.getElementById('btn-prev').addEventListener('click', () => playFromQueue(queueIndex - 1));
-document.getElementById('btn-next').addEventListener('click', () => playFromQueue(queueIndex + 1));
+document.getElementById('btn-prev').addEventListener('click', () => changeTrack(-1));
+document.getElementById('btn-next').addEventListener('click', () => changeTrack(1));
 document.getElementById('btn-playpause').addEventListener('click', () => {
   if (videoEl.paused) videoEl.play().catch(function () {});
   else videoEl.pause();
