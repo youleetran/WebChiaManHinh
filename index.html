@@ -982,7 +982,7 @@ function stopPlayer() {
 // Máy yếu và mạng 4G chỉ cần H.264 tới 480p: giải mã bằng phần cứng, tải nhẹ.
 // VP9 và AV1 có thể phải giải mã bằng CPU, gây giật.
 function isLightTrack(rep) {
-  if (String(rep.mimeType).indexOf('audio') === 0) return /mp4a/.test(rep.codecs);
+  if (String(rep.mimeType).indexOf('audio') === 0) return /mp4a\.40\.2/.test(rep.codecs);  // AAC-LC, bỏ HE-AAC chất lượng thấp
   return /avc1/.test(rep.codecs) && rep.height <= VIDEO_MAX_HEIGHT;
 }
 
