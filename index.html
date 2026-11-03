@@ -115,7 +115,8 @@
 
   .search-bar { position: relative; display: flex; gap: 6px; padding: 6px 8px; }
   #search-input {
-    flex: 1; min-width: 0; font-size: 16px; padding: 8px 10px;
+    /* Chữ to để iPhone không tự phóng to trang khi chạm vào ô nhập (chữ nhỏ là bị phóng) */
+    flex: 1; min-width: 0; font-size: 26px; padding: 2px 10px;
     background: var(--bg); color: var(--text);
     border: 1px solid var(--border); border-radius: 10px; outline: none;
   }
@@ -1286,6 +1287,18 @@ function resumeLast() {
 /* ============================================================
    KHỞI ĐỘNG
    ============================================================ */
+// Thêm ?debug vào địa chỉ để xem trang có bị trình duyệt phóng to hay không
+if (location.search.includes('debug') && window.visualViewport) {
+  const debugEl = document.createElement('div');
+  debugEl.style.cssText = 'position:fixed;z-index:9999;left:50%;bottom:0;background:#000;color:#0f0;font-size:14px;padding:2px 6px;';
+  document.body.appendChild(debugEl);
+  setInterval(function () {
+    const v = window.visualViewport;
+    debugEl.textContent = innerWidth + '×' + innerHeight + ' vv ' + Math.round(v.width) + '×' + Math.round(v.height) +
+      ' scale ' + v.scale.toFixed(2) + ' lech ' + Math.round(v.offsetLeft) + ',' + Math.round(v.offsetTop) + ' cuon ' + Math.round(scrollX);
+  }, 500);
+}
+
 startGPS();
 refreshInstances(); // lấy thêm máy chủ video dự phòng
 resumeLast();       // tiếp tục video đang xem dở
