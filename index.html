@@ -168,7 +168,7 @@
     position: absolute; z-index: 5; right: 20px; bottom: 8px; width: 150px; cursor: pointer;
     border: 2px solid var(--accent); border-radius: 12px;
   }
-  #app.list-view #video { pointer-events: none; }
+  #app.list-view #video { pointer-events: none; aspect-ratio: 16 / 9; }
   #app.list-view .np-card { display: none; }
   #app.list-view #results { padding-bottom: 100px; }
 
@@ -340,6 +340,10 @@ const ROAD_MATCH_M = 35;      // đường xa hơn khoảng này thì không tí
 const LIMIT_STALE_MS = 30000;  // giữ giới hạn cũ tối đa bao lâu khi không khớp đường
 const VIDEO_START_TIMEOUT_MS = 25000; // quá thời gian này chưa có hình thì thử lại
 const VIDEO_TRIES_PER_SERVER = 3;     // mỗi máy chủ được thử tối đa bấy nhiêu lần cho một video
+const API_TRIES = 3;                  // máy chủ quá tải hay báo lỗi thoáng qua, nên thử lại vài lần
+const API_RETRY_MS = 1500;
+const MAX_AUTO_SKIPS = 3;             // tự bỏ qua tối đa bấy nhiêu video lỗi liên tiếp rồi mới báo
+const TRACK_CHANGE_DELAY_MS = 400;    // bấm chuyển bài liên tiếp thì chỉ tải bài cuối, đỡ quá tải máy chủ
 const VIDEO_MAX_HEIGHT = 480;         // nửa màn hình xe không cần nét hơn, tải nhẹ thì đỡ giật
 const VIDEO_BUFFER_S = 45;            // tải trước bấy nhiêu giây để đỡ qua lúc mạng yếu
 
@@ -833,18 +837,23 @@ async function refreshInstances() {
   } catch (e) {}
 }
 
-// Gọi API Invidious, tự thử lần lượt các instance (bỏ qua những cái trong skip)
-async function invidiousFetch(path, skip) {
+// Gọi API Invidious, tự thử lần lượt các instance (bỏ qua những cái trong skip), hết lượt thì thử lại.
+// isCurrent trả về false nghĩa là kết quả không còn cần nữa, ví dụ đã chuyển sang bài khác.
+async function invidiousFetch(path, skip, isCurrent) {
   let lastErr;
-  for (const base of instances.slice()) {
-    if (skip && skip.has(base)) continue;
-    try {
-      const r = await fetchWithTimeout(base + path);
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const data = await r.json();
-      markInstanceGood(base);
-      return { data, base };
-    } catch (e) { lastErr = e; }
+  for (let attempt = 0; attempt < API_TRIES; attempt++) {
+    if (attempt > 0) await new Promise(done => setTimeout(done, API_RETRY_MS));
+    for (const base of instances.slice()) {
+      if (skip && skip.has(base)) continue;
+      if (isCurrent && !isCurrent()) throw new Error('Không còn cần');
+      try {
+        const r = await fetchWithTimeout(base + path);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        markInstanceGood(base);
+        return { data, base };
+      } catch (e) { lastErr = e; }
+    }
   }
   throw lastErr || new Error('Không kết nối được Invidious');
 }
@@ -977,12 +986,14 @@ function renderResults(items, emptyText) {
 
 function playFromQueue(i) {
   if (i < 0 || i >= queue.length) return;
+  clearTimeout(trackChangeTimer);
   queueIndex = i;
   pendingResumeTime = 0;      // chuyển bài thì không tua tới chỗ đang xem dở của bài cũ
   playSong(queue[i]);
 }
 
 // step = 1 là bài sau, -1 là bài trước
+let trackChangeTimer = null;
 function changeTrack(step) {
   // Mở lại trang và phát tiếp video xem dở thì chưa có hàng đợi, lấy danh sách đang hiện
   if (!queue.length) {
@@ -997,16 +1008,23 @@ function changeTrack(step) {
   let i = (queueIndex + step) % queue.length;   // hết danh sách thì quay lại bài đầu
   const id = queue[i].videoId || extractVideoId(queue[i].url);
   if (id === currentVideoId && queue.length > 1) i = (i + step + queue.length) % queue.length;
-  playFromQueue(i);
+  queueIndex = i;
+  clearTimeout(trackChangeTimer);
+  trackChangeTimer = setTimeout(function () { playFromQueue(i); }, TRACK_CHANGE_DELAY_MS);
 }
 
+function clearPlayError() {
+  resultsEl.querySelectorAll('.err').forEach(el => el.remove());
+}
 function showPlayError(msg) {
+  clearPlayError();
   resultsEl.insertAdjacentHTML('afterbegin', '<div class="err">' + escapeHtml(msg) + '</div>');
   setListOpen(true);
 }
 
 // failCounts = số lần lỗi của từng instance với video này.
 // Instance có thể lỗi ngẫu nhiên nên được thử lại vài lần trước khi bỏ qua.
+let autoSkips = 0;           // số video lỗi đã tự bỏ qua liên tiếp
 async function playSong(item, failCounts) {
   const token = ++playToken;
   const counts = failCounts || new Map();
@@ -1015,7 +1033,7 @@ async function playSong(item, failCounts) {
   counts.forEach((n, b) => { if (n >= VIDEO_TRIES_PER_SERVER) skip.add(b); });
   stopPlayer();
   try {
-    const { data: s, base } = await invidiousFetch('/api/v1/videos/' + videoId, skip);
+    const { data: s, base } = await invidiousFetch('/api/v1/videos/' + videoId, skip, () => token === playToken);
     if (token !== playToken) return;
     if (s.liveNow) {
       showPlayError('Không phát được video trực tiếp.');
@@ -1023,7 +1041,15 @@ async function playSong(item, failCounts) {
     }
     applyPlayer(s, item, base, counts, token);
   } catch (e) {
-    if (token === playToken) showPlayError('Không phát được video này trên máy chủ nào. Thử lại sau.');
+    if (token !== playToken) return;
+    // Video này không mở được thì tự sang bài sau, lỗi nhiều lần liên tiếp mới báo
+    if (queue.length > 1 && autoSkips < MAX_AUTO_SKIPS) {
+      autoSkips++;
+      changeTrack(1);
+    } else {
+      autoSkips = 0;
+      showPlayError('Không phát được video này trên máy chủ nào. Thử lại sau.');
+    }
   }
 }
 
@@ -1094,7 +1120,10 @@ function playVideo(s, item, base, failCounts, token) {
     });
     startupTimer = setTimeout(failOver, VIDEO_START_TIMEOUT_MS);
     videoEl.addEventListener('canplay', function () {
-      if (token === playToken) clearTimeout(startupTimer);
+      if (token !== playToken) return;
+      clearTimeout(startupTimer);
+      autoSkips = 0;
+      clearPlayError();
     }, { once: true });
     // local=true để instance proxy toàn bộ phân đoạn video (URL gốc bị khóa IP)
     dashPlayer.initialize(videoEl, s.dashUrl + '?local=true', true);

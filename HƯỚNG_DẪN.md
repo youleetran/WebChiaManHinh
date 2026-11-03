@@ -59,6 +59,7 @@ Dữ liệu © OpenStreetMap, giấy phép ODbL: giữ dòng ghi nguồn ở gó
 ## 7. Khi video không tìm/phát được
 - Trang tự đổi máy chủ khi một máy chủ lỗi hoặc tải quá 25 giây, và tự lấy thêm máy chủ mới từ [api.invidious.io/instances.json](https://api.invidious.io/instances.json) khi mở trang.
 - ⚠️ Máy chủ Invidious công khai hay bị YouTube chặn. Lúc kiểm tra (03/11/2026) chỉ có **một** máy chủ công khai cho phép gọi API là `https://yt.chocolatemoo53.com`. Nếu nó hỏng và chưa có máy chủ mới thì không xem được video.
+- Máy chủ quá tải hay báo lỗi thoáng qua, nên trang tự thử lại 3 lần. Video vẫn không mở được thì trang tự sang bài sau, lỗi 3 bài liên tiếp mới báo.
 - Video trực tiếp (live) không phát được nên không hiện trong kết quả tìm kiếm.
 
 ## 8. Yêu thích và đã xem
