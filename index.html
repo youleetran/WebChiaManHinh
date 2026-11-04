@@ -335,6 +335,7 @@ const BEARING_IGNORE = 2;      // lệch ít hơn chừng này độ thì không
 const POSITION_SMOOTH = 0.3;   // mỗi lần GPS chỉ kéo mũi tên một phần về điểm đo, phần còn lại đi theo tốc độ xe
 const PREDICT_MAX_M = 25;      // điểm dự đoán lệch điểm đo quá chừng này thì tin điểm đo
 const PREDICT_MAX_TURN = 12;   // đang rẽ gắt hơn chừng này độ thì tin điểm đo, không dự đoán theo hướng cũ
+const GPS_RESTART_MS = 15000;  // quá lâu không có vị trí mới thì yêu cầu GPS lại từ đầu
 const STOP_HOLD_M = 8;         // xe đứng yên mà GPS nhảy trong khoảng này thì giữ nguyên mũi tên
 const NAV_MOVE_MIN_MS = 300;    // thời gian trượt giữa hai lần cập nhật GPS: bằng khoảng cách giữa hai lần,
 const NAV_MOVE_MAX_MS = 3000;  // trong giới hạn này, để xe trượt liền mạch chứ không chạy rồi dừng
@@ -491,16 +492,57 @@ if (map) {
 /* ---------- GPS ---------- */
 function setStatus(msg) { document.getElementById('gps-status').textContent = msg; }
 
+let gpsWatchId = null;
+let gpsHeardAt = 0;         // lần cuối nhận được vị trí
+let gpsAskedAt = 0;         // lần cuối yêu cầu GPS
+let gpsRestarts = 0;
+
 function startGPS() {
   if (!('geolocation' in navigator)) {
     setStatus('⚠️ Trình duyệt không hỗ trợ GPS — chạm vào bản đồ để đặt vị trí');
     return;
   }
-  setStatus('Đang tìm GPS… (cần mở trang qua HTTPS)');
-  navigator.geolocation.watchPosition(onPosition, onGPSError, {
+  if (!gpsHeardAt) setStatus('Đang tìm GPS… (cần mở trang qua HTTPS)');   // đã có vị trí thì giữ nguyên tên đường
+  gpsAskedAt = Date.now();
+  gpsWatchId = navigator.geolocation.watchPosition(onPosition, onGPSError, {
     enableHighAccuracy: true, maximumAge: 2000, timeout: 15000
   });
 }
+
+// iPhone ngừng cấp vị trí cho trang web khi màn hình tắt, trang không tự lấy được.
+// Khi màn hình sáng lại, hoặc GPS im lặng quá lâu, thì yêu cầu lại để bản đồ chạy tiếp ngay.
+function restartGPS() {
+  if (gpsWatchId != null) navigator.geolocation.clearWatch(gpsWatchId);
+  gpsRestarts++;
+  startGPS();
+}
+setInterval(function () {
+  if (document.visibilityState !== 'visible' || !('geolocation' in navigator)) return;
+  const now = Date.now();
+  if (now - Math.max(gpsHeardAt, gpsAskedAt) > GPS_RESTART_MS) restartGPS();
+}, 5000);
+
+// Xin giữ màn hình luôn sáng để iPhone không tự khóa khi đang chạy xe
+let wakeLock = null;
+let wakeState = 'chua xin';
+async function keepScreenOn() {
+  if (wakeLock || document.visibilityState !== 'visible') return;
+  if (!('wakeLock' in navigator)) { wakeState = 'khong ho tro'; return; }
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeState = 'dang giu';
+    wakeLock.addEventListener('release', function () { wakeLock = null; wakeState = 'da nha'; });
+  } catch (e) {
+    wakeState = 'bi tu choi';
+  }
+}
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState !== 'visible') return;
+  keepScreenOn();
+  if (Date.now() - gpsHeardAt > GPS_RESTART_MS) restartGPS();
+});
+// iPhone thường chỉ cho giữ màn hình sau khi người dùng chạm vào trang
+document.addEventListener('pointerdown', keepScreenOn);
 
 // Khoảng cách (m) giữa hai điểm, đủ chính xác cho quãng ngắn
 function distanceM(lat1, lon1, lat2, lon2) {
@@ -594,6 +636,7 @@ function steadyPosition(lat, lon, heading, kmh) {
 }
 
 function onPosition(pos) {
+  gpsHeardAt = Date.now();
   if (!map) return;
   const lat = pos.coords.latitude, lon = pos.coords.longitude;
   const { kmh, heading } = readMotion(pos);
@@ -1650,17 +1693,28 @@ if (location.search.includes('debug') && window.visualViewport) {
   const debugEl = document.createElement('div');
   debugEl.style.cssText = 'position:fixed;z-index:9999;left:50%;bottom:0;background:#000;color:#0f0;font-size:14px;padding:2px 6px;';
   document.body.appendChild(debugEl);
+  // Đo xem lúc tắt màn hình iPhone thì trang có còn chạy và GPS có còn về không
+  const openedAt = Date.now();
+  let lastTick = openedAt, tickGapMax = 0, gpsGapMax = 0;
   setInterval(function () {
+    const now = Date.now();
+    tickGapMax = Math.max(tickGapMax, now - lastTick);
+    lastTick = now;
+    if (gpsHeardAt) gpsGapMax = Math.max(gpsGapMax, now - gpsHeardAt);
     const v = window.visualViewport;
     debugEl.textContent = innerWidth + '×' + innerHeight + ' vv ' + Math.round(v.width) + '×' + Math.round(v.height) +
       ' scale ' + v.scale.toFixed(2) + ' lech ' + Math.round(v.offsetLeft) + ',' + Math.round(v.offsetTop) + ' cuon ' + Math.round(scrollX) +
       ' | GPS ' + gpsCount + ' lan, ' + gpsNoHeading + ' khong huong, cach ' + gpsGapS.toFixed(1) + 's, xoay ' +
       (map ? Math.round(map.getBearing()) : '-') + ', bam ' + (follow ? 'co' : 'khong') +
-      ', tu ve ' + gpsForcedDraws + ', mat WebGL ' + glLost;
+      ', tu ve ' + gpsForcedDraws + ', mat WebGL ' + glLost +
+      ', xin lai GPS ' + gpsRestarts + ', sang ' + wakeState +
+      ' | mo ' + Math.round((now - openedAt) / 1000) + 's, trang ngung ' + Math.round(tickGapMax / 1000) +
+      's, GPS ngung ' + Math.round(gpsGapMax / 1000) + 's';
   }, 500);
 }
 
 startGPS();
+keepScreenOn();
 refreshInstances(); // lấy thêm máy chủ video dự phòng
 resumeLast();       // tiếp tục video đang xem dở
 doSearch('Nhạc Chill');   // tải sẵn vài video cho khỏi trống

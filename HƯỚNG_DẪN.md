@@ -55,6 +55,8 @@ Dữ liệu © OpenStreetMap, giấy phép ODbL: giữ dòng ghi nguồn ở gó
 - ⚠️ Dữ liệu biển báo rất ít: cả nước 18 biển nhường đường, 11 biển dừng, 22 camera, 83 biển giới hạn, và phần lớn nơi không có biển nào. Không thấy biểu tượng không có nghĩa là ngoài đường không có biển. Luôn nhìn biển thật.
 - Cập nhật cùng dữ liệu đường: `python tools/build_signs.py vietnam-latest.osm.pbf data/signs`
 
+- ⚠️ **iPhone phải sáng màn hình thì bản đồ mới chạy.** Khi màn hình tắt, iPhone ngừng cấp GPS cho trang web. Vào Cài đặt → Màn hình & Độ sáng → Tự động khóa → **Không bao giờ**, giữ Carvia mở, không bấm nút nguồn, giảm độ sáng và cắm sạc. Trang cũng tự xin giữ màn hình sáng nếu iPhone cho phép, và tự bắt lại GPS khi màn hình sáng lại.
+
 ## 6. Khi video bị giật
 - Trang chỉ phát H.264 tối đa 480p (`VIDEO_MAX_HEIGHT`) và tải trước 45 giây (`VIDEO_BUFFER_S`), để đỡ nặng máy và chịu được lúc mạng yếu.
 - Video đi qua máy chủ Invidious công khai, mỗi đoạn mất khoảng 1–2 giây mới bắt đầu tải (đo ngày 03/11/2026 từ máy tính). Máy chủ quá tải thì video vẫn có thể dừng để tải.
