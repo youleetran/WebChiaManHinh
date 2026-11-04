@@ -38,6 +38,13 @@
   /* ===== TRÁI: BẢN ĐỒ ===== */
   #map-pane { position: relative; flex: 1 1 50%; min-width: 0; border-right: 2px solid var(--border); }
   #map { position: absolute; inset: 0; background: #242f3e; }
+  /* Lớp video chứa bản đồ, xem phần "Vẽ qua lớp video" trong script */
+  #map-video { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; object-fit: fill; pointer-events: none; }
+  #map-pane:not(.mirror) #map-video { visibility: hidden; }
+  #map-pane.mirror #nav-arrow,
+  #map-pane.mirror #speed-overlay,
+  #map-pane.mirror #warning,
+  #map-pane.mirror #gps-status { visibility: hidden; }
   #nav-arrow { width: 52px; height: 52px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.55)); }
   #map .maplibregl-ctrl-group { background: rgba(23,32,44,0.92); border: 1px solid var(--border); box-shadow: none; }
   #map .maplibregl-ctrl-group button + button { border-top-color: var(--border); }
@@ -336,6 +343,9 @@ const POSITION_SMOOTH = 0.3;   // mỗi lần GPS chỉ kéo mũi tên một ph�
 const PREDICT_MAX_M = 25;      // điểm dự đoán lệch điểm đo quá chừng này thì tin điểm đo
 const PREDICT_MAX_TURN = 12;   // đang rẽ gắt hơn chừng này độ thì tin điểm đo, không dự đoán theo hướng cũ
 const GPS_RESTART_MS = 15000;  // quá lâu không có vị trí mới thì yêu cầu GPS lại từ đầu
+const GLIDE_FRAME_MS = 100;     // khi trình duyệt ngừng cấp khung hình thì tự trượt theo nhịp này
+const MIRROR_FRAME_MS = 33;    // lớp video cập nhật nhanh nhất khoảng 30 hình mỗi giây
+const MIRROR_IDLE_MS = 200;    // bản đồ đứng yên vẫn cập nhật ô tốc độ, tên đường theo nhịp này
 const STOP_HOLD_M = 8;         // xe đứng yên mà GPS nhảy trong khoảng này thì giữ nguyên mũi tên
 const NAV_MOVE_MIN_MS = 300;    // thời gian trượt giữa hai lần cập nhật GPS: bằng khoảng cách giữa hai lần,
 const NAV_MOVE_MAX_MS = 3000;  // trong giới hạn này, để xe trượt liền mạch chứ không chạy rồi dừng
@@ -453,7 +463,8 @@ try {
     center: DEFAULT_CENTER,
     zoom: 5,
     pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),  // đủ nét, đỡ nặng khi đang phát video
-    attributionControl: false
+    attributionControl: false,
+    preserveDrawingBuffer: true   // để chép hình bản đồ sang lớp video
   });
   // giấy phép dữ liệu yêu cầu ghi nguồn
   map.addControl(new maplibregl.AttributionControl({ compact: false }), 'bottom-right');
@@ -697,13 +708,42 @@ function moveCamera(instant) {
   frameSeen = false;
   requestAnimationFrame(function () { frameSeen = true; });
   if (framesRunning) {
+    glide = null;
     map.easeTo(camera);
   } else {
     gpsForcedDraws++;
-    map.jumpTo(camera);
-    map.redraw();
+    startGlide(camera, gap);
   }
 }
+
+// Không có khung hình thì bản đồ không tự trượt được, nên tự chia nhỏ quãng đường theo đồng hồ
+let glide = null;
+function startGlide(camera, duration) {
+  const c = map.getCenter();
+  const bearing = map.getBearing();
+  const setup = { pitch: camera.pitch, padding: camera.padding };
+  if (camera.zoom != null) setup.zoom = camera.zoom;
+  map.jumpTo(setup);
+  glide = {
+    fromLat: c.lat, fromLon: c.lng, fromBearing: bearing,
+    toLat: camera.center[1], toLon: camera.center[0],
+    turn: camera.bearing == null ? 0 : angleDelta(bearing, camera.bearing),
+    start: Date.now(), duration: Math.max(duration, GLIDE_FRAME_MS)
+  };
+  stepGlide();
+}
+function stepGlide() {
+  if (!glide) return;
+  if (!follow) { glide = null; return; }
+  const t = Math.min(1, (Date.now() - glide.start) / glide.duration);
+  map.jumpTo({
+    center: [glide.fromLon + (glide.toLon - glide.fromLon) * t, glide.fromLat + (glide.toLat - glide.fromLat) * t],
+    bearing: glide.fromBearing + glide.turn * t
+  });
+  map.redraw();
+  if (t >= 1) glide = null;
+}
+setInterval(stepGlide, GLIDE_FRAME_MS);
 // Khung bản đồ đổi kích thước thì cập nhật ngay, nếu không mũi tên sẽ lệch khỏi giữa
 if (map) new ResizeObserver(function () {
   map.resize();
@@ -711,6 +751,152 @@ if (map) new ResizeObserver(function () {
 }).observe(map.getContainer());
 
 if (map) map.on('webglcontextlost', function () { glLost++; });
+
+/* ---------- Vẽ qua lớp video ----------
+   Khi khóa iPhone, trang và GPS vẫn chạy nhưng chữ và bản đồ thường không được cập nhật lên màn hình xe,
+   chỉ video còn chạy (đã đo trên xe). Vì vậy chép bản đồ, mũi tên và các ô sang một canvas rồi phát thành video. */
+let mirrorCanvas = null;
+let mirrorCtx = null;
+let mirrorTrack = null;
+let mirrorVideo = null;
+let mirrorAt = 0;
+
+function drawMirrorArrow(ctx) {
+  if (!navArrow) return;
+  const p = map.project(navArrow.getLngLat());
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.scale(1, Math.cos(map.getPitch() * Math.PI / 180));
+  ctx.rotate((navArrow.getRotation() - map.getBearing()) * Math.PI / 180);
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetY = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, -21);
+  ctx.lineTo(19, 19);
+  ctx.lineTo(0, 9.5);
+  ctx.lineTo(-19, 19);
+  ctx.closePath();
+  ctx.fillStyle = '#1a73e8';
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#fff';
+  ctx.stroke();
+  ctx.restore();
+}
+function drawMirrorCard(ctx, x, y) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, 52, 52, 10);
+  ctx.fillStyle = 'rgba(14,17,22,0.92)';
+  ctx.fill();
+}
+function drawMirrorOverlay(ctx, width, height) {
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Biển giới hạn, cùng vị trí với #speed-overlay
+  const limitBox = document.getElementById('speed-limit-box');
+  const speedBox = document.getElementById('current-speed-box');
+  const speedX = width - 122 - 52, limitX = speedX - 58, top = 10;
+  drawMirrorCard(ctx, limitX, top);
+  drawMirrorCard(ctx, speedX, top);
+  const estimated = limitBox.classList.contains('estimated');
+  const unknown = limitBox.classList.contains('unknown');
+  ctx.beginPath();
+  ctx.arc(limitX + 26, top + 26, 20, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = estimated ? '#999' : '#e11d2e';
+  ctx.stroke();
+  ctx.fillStyle = estimated ? '#777' : (unknown ? '#999' : '#111');
+  ctx.font = '800 ' + (estimated ? 15 : (unknown ? 16 : 19)) + 'px Arial, sans-serif';
+  ctx.fillText(document.getElementById('speed-limit').textContent, limitX + 26, top + 27);
+  // Tốc độ
+  ctx.fillStyle = speedBox.classList.contains('over') ? '#ff4d4d' : '#7ee787';
+  ctx.font = '700 28px Arial, sans-serif';
+  ctx.fillText(document.getElementById('current-speed').textContent, speedX + 26, top + 27);
+  // Cảnh báo chạy quá tốc độ, nhấp nháy như bản thường
+  if (!document.getElementById('warning').classList.contains('hidden') && Date.now() % 600 < 300) {
+    const text = '⚠️ CHẠY QUÁ TỐC ĐỘ';
+    ctx.font = '800 18px Arial, sans-serif';
+    const w = ctx.measureText(text).width + 28;
+    const x = width * 0.6 - w / 2;
+    ctx.beginPath();
+    ctx.roundRect(x, 68, w, 34, 10);
+    ctx.fillStyle = '#ff4d4d';
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(text, width * 0.6, 86);
+  }
+  // Tên đường
+  let name = document.getElementById('gps-status').textContent;
+  ctx.font = '600 15px Arial, sans-serif';
+  const maxW = width * 0.62 - 28;
+  if (ctx.measureText(name).width > maxW) {
+    while (name.length > 1 && ctx.measureText(name + '…').width > maxW) name = name.slice(0, -1);
+    name += '…';
+  }
+  const w = ctx.measureText(name).width + 28;
+  const y = height - 22 - 28;
+  ctx.beginPath();
+  ctx.roundRect(width / 2 - w / 2, y, w, 28, 14);
+  ctx.fillStyle = 'rgba(23,32,44,0.92)';
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillText(name, width / 2, y + 15);
+}
+function drawMirror(force) {
+  if (!mirrorTrack) return;
+  const now = Date.now();
+  if (force !== true && now - mirrorAt < MIRROR_FRAME_MS) return;
+  mirrorAt = now;
+  const source = map.getCanvas();
+  const box = map.getContainer();
+  if (!source.width || !source.height || !box.clientWidth || !box.clientHeight) return;
+  const ctx = mirrorCtx;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(source, 0, 0, mirrorCanvas.width, mirrorCanvas.height);
+  ctx.setTransform(mirrorCanvas.width / box.clientWidth, 0, 0, mirrorCanvas.height / box.clientHeight, 0, 0);
+  drawMirrorArrow(ctx);
+  drawMirrorOverlay(ctx, box.clientWidth, box.clientHeight);
+  mirrorTrack.requestFrame();
+}
+function startMirror() {
+  if (!map) return;
+  const canvas = document.createElement('canvas');
+  if (!canvas.captureStream || !canvas.getContext('2d').roundRect) return;
+  const stream = canvas.captureStream(0);
+  const track = stream.getVideoTracks()[0];
+  if (!track || !track.requestFrame) return;
+  // Kích thước cố định: đổi kích thước canvas thì video ngừng nhận hình. Khung bản đồ đổi cỡ thì co giãn hình bên trong.
+  const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+  canvas.width = Math.round(window.innerWidth * ratio);
+  canvas.height = Math.round(window.innerHeight * ratio);
+  mirrorCanvas = canvas;
+  mirrorCtx = canvas.getContext('2d');
+  mirrorTrack = track;
+  const video = document.createElement('video');
+  video.id = 'map-video';
+  video.muted = true;
+  video.autoplay = true;
+  video.setAttribute('playsinline', '');
+  video.disablePictureInPicture = true;
+  const pane = document.getElementById('map-pane');
+  // Video không chạy thì trở về bản đồ thường, không để đứng hình
+  video.addEventListener('playing', function () { pane.classList.add('mirror'); });
+  video.addEventListener('pause', function () { pane.classList.remove('mirror'); });
+  video.addEventListener('error', function () { pane.classList.remove('mirror'); });
+  document.getElementById('map').insertAdjacentElement('afterend', video);
+  mirrorVideo = video;
+  video.srcObject = stream;
+  video.play().catch(function () {});
+  document.addEventListener('pointerdown', function () { if (video.paused) video.play().catch(function () {}); });
+  map.on('render', drawMirror);
+  setInterval(function () { drawMirror(true); }, MIRROR_IDLE_MS);
+  drawMirror(true);
+}
+startMirror();
 
 // Mũi tên trượt cùng camera nên luôn đứng giữa và chỉ thẳng lên trên
 if (map) map.on('move', function () {
@@ -1699,26 +1885,6 @@ if (location.search.includes('debug') && window.visualViewport) {
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState !== 'visible') hiddenCount++;
   });
-  // Phép thử: lúc khóa máy, số đếm trong khung đỏ này có còn tăng trên màn hình xe không.
-  // Khung này là video lấy hình từ canvas, không phải chữ thường của trang.
-  const testCanvas = document.createElement('canvas');
-  testCanvas.width = 220;
-  testCanvas.height = 70;
-  const testCtx = testCanvas.getContext('2d');
-  let testTrack = null;
-  if (testCanvas.captureStream) {
-    const stream = testCanvas.captureStream(0);
-    testTrack = stream.getVideoTracks()[0];
-    const testVideo = document.createElement('video');
-    testVideo.muted = true;
-    testVideo.autoplay = true;
-    testVideo.setAttribute('playsinline', '');
-    testVideo.style.cssText = 'position:fixed;z-index:9999;left:70px;top:70px;width:165px;height:52px;border:2px solid #f33;background:#000;';
-    testVideo.srcObject = stream;
-    document.body.appendChild(testVideo);
-    testVideo.play().catch(function () {});
-    document.addEventListener('pointerdown', function () { testVideo.play().catch(function () {}); });
-  }
   let lastTick = openedAt, tickGapMax = 0, gpsGapMax = 0;
   setInterval(function () {
     const now = Date.now();
@@ -1726,15 +1892,6 @@ if (location.search.includes('debug') && window.visualViewport) {
     lastTick = now;
     if (gpsHeardAt) gpsGapMax = Math.max(gpsGapMax, now - gpsHeardAt);
     const v = window.visualViewport;
-    if (testTrack) {
-      testCtx.fillStyle = '#000';
-      testCtx.fillRect(0, 0, 220, 70);
-      testCtx.fillStyle = '#fff';
-      testCtx.font = 'bold 26px Arial';
-      testCtx.fillText('VIDEO ' + Math.round((now - openedAt) / 1000) + 's', 8, 30);
-      testCtx.fillText('GPS ' + gpsCount, 8, 62);
-      if (testTrack.requestFrame) testTrack.requestFrame();
-    }
     debugEl.textContent = innerWidth + '×' + innerHeight + ' vv ' + Math.round(v.width) + '×' + Math.round(v.height) +
       ' scale ' + v.scale.toFixed(2) + ' lech ' + Math.round(v.offsetLeft) + ',' + Math.round(v.offsetTop) + ' cuon ' + Math.round(scrollX) +
       ' | GPS ' + gpsCount + ' lan, ' + gpsNoHeading + ' khong huong, cach ' + gpsGapS.toFixed(1) + 's, xoay ' +
@@ -1742,7 +1899,8 @@ if (location.search.includes('debug') && window.visualViewport) {
       ', tu ve ' + gpsForcedDraws + ', mat WebGL ' + glLost +
       ', xin lai GPS ' + gpsRestarts + ', sang ' + wakeState +
       ' | mo ' + Math.round((now - openedAt) / 1000) + 's, trang ngung ' + Math.round(tickGapMax / 1000) +
-      's, GPS ngung ' + Math.round(gpsGapMax / 1000) + 's, an ' + hiddenCount + ', video thu ' + (testTrack ? 'co' : 'khong');
+      's, GPS ngung ' + Math.round(gpsGapMax / 1000) + 's, an ' + hiddenCount + ', lop video ' +
+      (document.getElementById('map-pane').classList.contains('mirror') ? 'dang chay' : (mirrorTrack ? 'chua chay' : 'khong ho tro'));
   }, 500);
 }
 
