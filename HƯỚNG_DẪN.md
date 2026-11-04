@@ -8,7 +8,7 @@ File chính: `index.html` — mở là chạy, không cần cài đặt gì.
 - Trên điện thoại hoặc xe, trang phải được mở qua **HTTPS** thì GPS mới chạy (xem mục 2).
 
 ## 2. Đưa lên mạng (miễn phí, có HTTPS → GPS hoạt động)
-⚠️ Phải đưa lên **cả thư mục**, gồm `data/roads` (3.226 file, khoảng 133 MB). Nếu thiếu thư mục này, trang không có giới hạn tốc độ. Thư mục `tools` thì không cần đưa lên. Dung lượng này chưa được thử trên các dịch vụ dưới đây, nên kiểm tra giới hạn của gói miễn phí trước khi chọn:
+⚠️ Phải đưa lên **cả thư mục**, gồm `data/roads` (3.226 file, khoảng 133 MB) và `data/cams`. Nếu thiếu `data/roads`, trang không có giới hạn tốc độ. Nếu thiếu `data/cams`, bản đồ không có camera từ `speedcams.json`. Thư mục `tools` và file `speedcams.json` thì không cần đưa lên. Dung lượng này chưa được thử trên các dịch vụ dưới đây, nên kiểm tra giới hạn của gói miễn phí trước khi chọn:
 - **GitHub Pages**: đẩy cả thư mục lên repo → Settings → Pages → bật.
 - **Netlify**: vào [netlify.com](https://netlify.com) → Deploy manually → kéo thư mục.
 - **Vercel**: vào [vercel.com](https://vercel.com) → New Project → kéo thư mục `WebChiaManHinh` → Deploy.
@@ -31,7 +31,7 @@ Màn hình Mazda Connect **không có trình duyệt chính thức**. Chọn 1 c
 ## 4. Giới hạn của phần "cảnh báo tốc độ" (quan trọng)
 - Trang web hiển thị **giới hạn tốc độ (km/h)** của con đường hiện tại, lấy từ dữ liệu **OpenStreetMap**.
 - Khi chạy quá giới hạn **+5 km/h** → bảng tốc độ đổi màu đỏ + nháy "CHẠY QUÁ TỐC ĐỘ" + tiếng bíp.
-- ❌ Đây **KHÔNG phải** cảnh báo **camera bắn tốc độ** thời gian thực (tính năng đó chỉ có ở app Waze). Trang web không thay thế được Waze nếu bạn cần cảnh báo camera.
+- ❌ Cảnh báo camera trên trang chỉ dựa vào danh sách có sẵn trong `speedcams.json`, **không** cập nhật thời gian thực như app Waze. Camera mới hoặc camera di động sẽ không được báo.
 - Trên bản đồ có hai ô chỉ hiện số: biển tròn là giới hạn, ô bên cạnh là tốc độ hiện tại.
 - Đường chưa có dữ liệu `maxspeed` trên OpenStreetMap → hiện số **ước tính** theo loại đường, màu xám, có dấu `~` (ví dụ `~50`). Số ước tính **không kích hoạt cảnh báo** và có thể khác biển báo thật. Bảng tốc độ chỉ hiện `--` khi không xác định được đường đang chạy (ví dụ xe cách đường trên 35 m).
 - Dữ liệu đường nằm sẵn trong `data/roads` (OpenStreetMap, bản ngày 01/11/2026), mỗi lần chỉ tải ô quanh vị trí xe, ô nặng nhất dưới 1 MB. Rớt mạng vẫn tra được trong các ô đã tải.
@@ -52,7 +52,11 @@ Dữ liệu © OpenStreetMap, giấy phép ODbL: giữ dòng ghi nguồn ở gó
 - Bản đồ lấy từ [OpenFreeMap](https://openfreemap.org) (miễn phí, không cần tài khoản) nên cần mạng, và thiết bị phải hỗ trợ WebGL. Nếu không có WebGL, bản đồ sẽ báo lỗi.
 
 - Bản đồ hiện biểu tượng đèn giao thông, biển dừng, biển nhường đường, camera tốc độ và biển giới hạn khi xe tới gần, lấy từ `data/signs` (OpenStreetMap). Biểu tượng đèn chỉ cho biết vị trí, **không** cho biết đèn đang xanh hay đỏ.
-- ⚠️ Dữ liệu biển báo rất ít: cả nước 18 biển nhường đường, 11 biển dừng, 22 camera, 83 biển giới hạn, và phần lớn nơi không có biển nào. Không thấy biểu tượng không có nghĩa là ngoài đường không có biển. Luôn nhìn biển thật.
+- ⚠️ Dữ liệu biển báo rất ít: cả nước 18 biển nhường đường, 11 biển dừng, 83 biển giới hạn, và phần lớn nơi không có biển nào. Không thấy biểu tượng không có nghĩa là ngoài đường không có biển. Luôn nhìn biển thật.
+- Camera lấy thêm từ `speedcams.json` (đủ 19.609 camera, camera hai chiều đường có thể nằm sát nhau), nằm trong `data/cams` (1.495 file). Camera có giới hạn tốc độ hiện con số màu đỏ. Dữ liệu có thể thiếu hoặc cũ.
+- Khi có camera phía trước trong vòng 500 m, bản đồ nhấp nháy khung vàng có biểu tượng camera và khoảng cách, cả khi khóa iPhone. Cảnh báo chỉ nháy, **không** có tiếng. File không cho biết camera bắn chiều nào nên có thể báo cả camera của chiều ngược lại. Camera ở khúc cua có thể báo muộn hơn vì trang chỉ xét đường thẳng trước mũi xe.
+- Khi có `speedcams.json` mới: `python tools/build_cams.py speedcams.json data/cams`
+- Bản đồ cũng hiện cây xăng từ OpenStreetMap, kèm tên hãng nếu có. Dữ liệu có thể thiếu hoặc cũ, ví dụ cây đã đóng cửa.
 - Cập nhật cùng dữ liệu đường: `python tools/build_signs.py vietnam-latest.osm.pbf data/signs`
 
 - Khi khóa iPhone, chữ và bản đồ thường không được cập nhật lên màn hình xe, nên trang vẽ bản đồ, mũi tên, tốc độ và tên đường qua một lớp video. Thiết bị không hỗ trợ thì tự trở về bản đồ thường. Lúc khóa máy không bấm được các nút trên trang.

@@ -44,6 +44,7 @@
   #map-pane.mirror #nav-arrow,
   #map-pane.mirror #speed-overlay,
   #map-pane.mirror #warning,
+  #map-pane.mirror #cam-warning,
   #map-pane.mirror #gps-status { visibility: hidden; }
   #nav-arrow { width: 52px; height: 52px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.55)); }
   #map .maplibregl-ctrl-group { background: rgba(23,32,44,0.92); border: 1px solid var(--border); box-shadow: none; }
@@ -106,6 +107,19 @@
   }
   #warning.hidden { display: none; }
   @keyframes blink { 50% { opacity: 0.35; } }
+
+  /* Cảnh báo sắp tới camera, nằm dưới cảnh báo quá tốc độ nếu có cả hai */
+  #cam-warning {
+    position: absolute; z-index: 1001; top: 68px; left: 60%; white-space: nowrap;
+    transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px;
+    background: #f59e0b; color: #111; font-weight: 800; font-size: 18px;
+    padding: 3px 12px 3px 3px; border-radius: 10px;
+    animation: blink 0.6s steps(2, start) infinite;
+  }
+  #cam-warning.hidden { display: none; }
+  #warning:not(.hidden) + #cam-warning { top: 108px; }
+  #cam-warning-icon { width: 32px; height: 32px; }
 
   /* ===== PHẢI: NHẠC ===== */
   #music-pane {
@@ -260,6 +274,10 @@
     </div>
 
     <div id="warning" class="hidden">⚠️ CHẠY QUÁ TỐC ĐỘ</div>
+    <div id="cam-warning" class="hidden">
+      <canvas id="cam-warning-icon" width="64" height="64"></canvas>
+      <span id="cam-warning-text"></span>
+    </div>
 
     <div id="map-tools">
       <button class="map-btn" id="btn-sound" title="Bật / tắt tiếng cảnh báo">🔔</button>
@@ -326,8 +344,11 @@ const INVIDIOUS_INSTANCES = [
 const INSTANCE_LIST_URL = 'https://api.invidious.io/instances.json';
 const ROAD_DATA_URL = 'data/roads/';
 const SIGN_DATA_URL = 'data/signs/';
+const CAM_DATA_URL = 'data/cams/';
+const CAM_WARN_M = 500;        // camera phía trước trong khoảng này thì nhấp nháy cảnh báo
+const CAM_WARN_SIDE_M = 60;    // camera lệch sang ngang hơn chừng này là ở đường khác, không cảnh báo
 // Phải giống SIGN_TYPES trong tools/build_signs.py
-const SIGN_TYPES = ['light', 'stop', 'give_way', 'camera', 'speed'];
+const SIGN_TYPES = ['light', 'stop', 'give_way', 'camera', 'speed', 'fuel'];
 const DEFAULT_CENTER = [108.0, 16.05]; // Việt Nam (khi chưa có GPS), thứ tự kinh độ, vĩ độ
 const MAP_TILES_URL = 'https://tiles.openfreemap.org/planet';
 const MAP_FONTS_URL = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
@@ -443,12 +464,22 @@ const NAV_MAP_STYLE = {
     { id: 'sign', type: 'symbol', source: 'signs', minzoom: 14,
       layout: {
         'icon-image': ['get', 'icon'],
+        // Camera vẽ sau cùng để không bị đèn hay cây xăng cùng chỗ che mất
+        'symbol-sort-key': ['case', ['get', 'isCamera'], 1, 0],
         'icon-size': ['interpolate', ['linear'], ['zoom'], 14, 0.65, 16, 1, 18, 1.25],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-pitch-alignment': 'viewport',
-        'icon-rotation-alignment': 'viewport'
-      } },
+        'icon-rotation-alignment': 'viewport',
+        // Tên cây xăng: hiện khi đủ chỗ, không che tên đường
+        'text-field': ['coalesce', ['get', 'name'], ''],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 13,
+        'text-anchor': 'top',
+        'text-offset': [0, 1.3],
+        'text-optional': true
+      },
+      paint: { 'text-color': '#8ff0b4', 'text-halo-color': '#17202c', 'text-halo-width': 1.5 } },
     { id: 'place-name', type: 'symbol', source: 'osm', 'source-layer': 'place', maxzoom: 14,
       layout: { 'text-field': ['coalesce', ['get', 'name'], ''], 'text-font': ['Noto Sans Regular'], 'text-size': 14 },
       paint: { 'text-color': '#d5b98a', 'text-halo-color': '#17202c', 'text-halo-width': 1.5 } }
@@ -829,6 +860,25 @@ function drawMirrorOverlay(ctx, width, height) {
     ctx.fillStyle = '#fff';
     ctx.fillText(text, width * 0.6, 86);
   }
+  // Cảnh báo sắp tới camera, cùng vị trí và nhịp nháy với #cam-warning.
+  // Nháy sáng rồi mờ chứ không tắt hẳn: lớp video cập nhật thưa nên có thể lỡ mất lúc sáng.
+  if (!document.getElementById('cam-warning').classList.contains('hidden')) {
+    ctx.globalAlpha = Date.now() % 600 < 300 ? 1 : 0.35;
+    const text = document.getElementById('cam-warning-text').textContent;
+    const camTop = document.getElementById('warning').classList.contains('hidden') ? 68 : 108;
+    ctx.font = '800 18px Arial, sans-serif';
+    const textW = ctx.measureText(text).width;
+    const w = textW + 55;
+    const x = width * 0.6 - w / 2;
+    ctx.beginPath();
+    ctx.roundRect(x, camTop, w, 38, 10);
+    ctx.fillStyle = '#f59e0b';
+    ctx.fill();
+    ctx.drawImage(document.getElementById('cam-warning-icon'), x + 3, camTop + 3, 32, 32);
+    ctx.fillStyle = '#111';
+    ctx.fillText(text, x + 43 + textW / 2, camTop + 20);
+    ctx.globalAlpha = 1;
+  }
   // Tên đường
   let name = document.getElementById('gps-status').textContent;
   ctx.font = '600 15px Arial, sans-serif';
@@ -1068,8 +1118,9 @@ function updateLimitFromRoads(lat, lon, heading) {
   }
 }
 
-/* ---------- Đèn giao thông và biển báo ----------
-   Đọc từ SIGN_DATA_URL (tạo bằng tools/build_signs.py), chia ô giống dữ liệu đường.
+/* ---------- Đèn giao thông, biển báo và camera tốc độ ----------
+   Đọc từ SIGN_DATA_URL (tạo bằng tools/build_signs.py) và CAM_DATA_URL (tools/build_cams.py),
+   chia ô giống dữ liệu đường.
    Đèn chỉ là biểu tượng vị trí: không có dữ liệu đèn đang xanh hay đỏ. */
 const signTiles = new Map();    // 'x_y' -> các điểm của ô đó, dạng GeoJSON
 const signRetryAt = new Map();
@@ -1080,16 +1131,27 @@ function renderSigns() {
 }
 if (map) map.on('load', renderSigns);
 
+async function fetchSignRecords(baseUrl, key) {
+  const r = await fetchWithTimeout(baseUrl + key + '.json', 20000);
+  if (r.status === 404) return [];   // ô không có điểm nào
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
 async function loadSignTile(key) {
   signTiles.set(key, []);     // đánh dấu để không tải trùng
   try {
-    const r = await fetchWithTimeout(SIGN_DATA_URL + key + '.json', 20000);
-    if (r.status !== 404 && !r.ok) throw new Error('HTTP ' + r.status);
-    // 404 = ô không có đèn hay biển nào
-    const records = (r.status === 404) ? [] : await r.json();
-    signTiles.set(key, records.map(([lat, lon, type, value]) => ({
+    const [signs, cams] = await Promise.all([
+      fetchSignRecords(SIGN_DATA_URL, key),
+      fetchSignRecords(CAM_DATA_URL, key)
+    ]);
+    signTiles.set(key, signs.concat(cams).map(([lat, lon, type, value, name]) => ({
       type: 'Feature',
-      properties: { icon: 'sign-' + SIGN_TYPES[type] + (value ? '-' + value : '') },
+      properties: {
+        icon: 'sign-' + SIGN_TYPES[type] + (value ? '-' + value : ''),
+        name: name || '',
+        isCamera: SIGN_TYPES[type] === 'camera'
+      },
       geometry: { type: 'Point', coordinates: [lon / 1e5, lat / 1e5] }
     })));
     const near = lastPoint ? tilesNear(lastPoint.lat, lastPoint.lon) : [];
@@ -1151,7 +1213,37 @@ function drawSignIcon(ctx, id) {
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-  } else if (id === 'sign-camera') {
+  } else if (id === 'sign-fuel') {
+    ctx.fillStyle = '#15803d';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(4, 4, S - 8, S - 8, 12);
+    ctx.fill();
+    ctx.stroke();
+    // Trụ bơm
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.roundRect(16, 13, 22, 36, 3);
+    ctx.fill();
+    ctx.fillRect(12, 47, 30, 5);
+    ctx.fillStyle = '#15803d';
+    ctx.fillRect(20, 18, 14, 10);
+    // Vòi bơm
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3.5;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(38, 21);
+    ctx.lineTo(47, 28);
+    ctx.lineTo(47, 41);
+    ctx.quadraticCurveTo(47, 45, 43, 45);
+    ctx.quadraticCurveTo(39, 45, 39, 41);
+    ctx.lineTo(39, 33);
+    ctx.stroke();
+  } else if (id.indexOf('sign-camera') === 0) {
+    // Camera có giới hạn tốc độ: thay ống kính bằng con số, ví dụ sign-camera-60
+    const limit = id.split('-')[2];
     ctx.fillStyle = '#1d4ed8';
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 3;
@@ -1160,12 +1252,20 @@ function drawSignIcon(ctx, id) {
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#fff';
-    ctx.fillRect(12, 22, 40, 26);
-    ctx.fillRect(22, 15, 18, 8);
-    ctx.fillStyle = '#1d4ed8';
-    ctx.beginPath();
-    ctx.arc(c, 35, 9, 0, Math.PI * 2);
-    ctx.fill();
+    if (limit) {
+      ctx.fillRect(10, 20, 44, 34);
+      ctx.fillRect(22, 12, 20, 8);
+      ctx.fillStyle = '#dc2626';
+      ctx.font = 'bold 28px Arial';
+      ctx.fillText(limit, c, 38);
+    } else {
+      ctx.fillRect(12, 22, 40, 26);
+      ctx.fillRect(22, 15, 18, 8);
+      ctx.fillStyle = '#1d4ed8';
+      ctx.beginPath();
+      ctx.arc(c, 35, 9, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } else {
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = '#dc2626';
@@ -1188,8 +1288,45 @@ if (map) map.on('styleimagemissing', function (e) {
   map.addImage(e.id, ctx.getImageData(0, 0, SIGN_ICON_PX, SIGN_ICON_PX), { pixelRatio: 2 });
 });
 
+/* ---------- Cảnh báo sắp tới camera ----------
+   Lấy camera gần nhất nằm trên hướng xe đang chạy. Chưa biết hướng xe thì tính mọi phía. */
+function nearestCameraAhead(lat, lon, heading) {
+  let best = null;
+  for (const features of signTiles.values()) {
+    for (const f of features) {
+      if (!f.properties.isCamera) continue;
+      const [camLon, camLat] = f.geometry.coordinates;
+      const dist = distanceM(lat, lon, camLat, camLon);
+      if (dist > CAM_WARN_M || (best && dist >= best.dist)) continue;
+      if (heading != null) {
+        const off = angleDelta(heading, bearingDeg(lat, lon, camLat, camLon)) * Math.PI / 180;
+        if (Math.cos(off) <= 0 || dist * Math.abs(Math.sin(off)) > CAM_WARN_SIDE_M) continue;
+      }
+      best = { dist, icon: f.properties.icon };
+    }
+  }
+  return best;
+}
+
+let camWarningIcon = null;
+function updateCameraWarning(lat, lon, heading) {
+  const box = document.getElementById('cam-warning');
+  const cam = nearestCameraAhead(lat, lon, heading);
+  box.classList.toggle('hidden', !cam);
+  if (!cam) return;
+  document.getElementById('cam-warning-text').textContent = 'CAMERA ' + Math.round(cam.dist / 10) * 10 + ' m';
+  if (cam.icon !== camWarningIcon) {
+    camWarningIcon = cam.icon;
+    const canvas = document.getElementById('cam-warning-icon');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawSignIcon(ctx, cam.icon);
+  }
+}
+
 function lookupSpeedLimit(lat, lon, heading) {
   lastPoint = { lat, lon, heading };
+  updateCameraWarning(lat, lon, heading);
   for (const key of tilesNear(lat, lon)) {
     if (signTiles.has(key) || Date.now() < (signRetryAt.get(key) || 0)) continue;
     loadSignTile(key);
