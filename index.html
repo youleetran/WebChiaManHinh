@@ -1695,6 +1695,30 @@ if (location.search.includes('debug') && window.visualViewport) {
   document.body.appendChild(debugEl);
   // Đo xem lúc tắt màn hình iPhone thì trang có còn chạy và GPS có còn về không
   const openedAt = Date.now();
+  let hiddenCount = 0;
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') hiddenCount++;
+  });
+  // Phép thử: lúc khóa máy, số đếm trong khung đỏ này có còn tăng trên màn hình xe không.
+  // Khung này là video lấy hình từ canvas, không phải chữ thường của trang.
+  const testCanvas = document.createElement('canvas');
+  testCanvas.width = 220;
+  testCanvas.height = 70;
+  const testCtx = testCanvas.getContext('2d');
+  let testTrack = null;
+  if (testCanvas.captureStream) {
+    const stream = testCanvas.captureStream(0);
+    testTrack = stream.getVideoTracks()[0];
+    const testVideo = document.createElement('video');
+    testVideo.muted = true;
+    testVideo.autoplay = true;
+    testVideo.setAttribute('playsinline', '');
+    testVideo.style.cssText = 'position:fixed;z-index:9999;left:70px;top:70px;width:165px;height:52px;border:2px solid #f33;background:#000;';
+    testVideo.srcObject = stream;
+    document.body.appendChild(testVideo);
+    testVideo.play().catch(function () {});
+    document.addEventListener('pointerdown', function () { testVideo.play().catch(function () {}); });
+  }
   let lastTick = openedAt, tickGapMax = 0, gpsGapMax = 0;
   setInterval(function () {
     const now = Date.now();
@@ -1702,6 +1726,15 @@ if (location.search.includes('debug') && window.visualViewport) {
     lastTick = now;
     if (gpsHeardAt) gpsGapMax = Math.max(gpsGapMax, now - gpsHeardAt);
     const v = window.visualViewport;
+    if (testTrack) {
+      testCtx.fillStyle = '#000';
+      testCtx.fillRect(0, 0, 220, 70);
+      testCtx.fillStyle = '#fff';
+      testCtx.font = 'bold 26px Arial';
+      testCtx.fillText('VIDEO ' + Math.round((now - openedAt) / 1000) + 's', 8, 30);
+      testCtx.fillText('GPS ' + gpsCount, 8, 62);
+      if (testTrack.requestFrame) testTrack.requestFrame();
+    }
     debugEl.textContent = innerWidth + '×' + innerHeight + ' vv ' + Math.round(v.width) + '×' + Math.round(v.height) +
       ' scale ' + v.scale.toFixed(2) + ' lech ' + Math.round(v.offsetLeft) + ',' + Math.round(v.offsetTop) + ' cuon ' + Math.round(scrollX) +
       ' | GPS ' + gpsCount + ' lan, ' + gpsNoHeading + ' khong huong, cach ' + gpsGapS.toFixed(1) + 's, xoay ' +
@@ -1709,7 +1742,7 @@ if (location.search.includes('debug') && window.visualViewport) {
       ', tu ve ' + gpsForcedDraws + ', mat WebGL ' + glLost +
       ', xin lai GPS ' + gpsRestarts + ', sang ' + wakeState +
       ' | mo ' + Math.round((now - openedAt) / 1000) + 's, trang ngung ' + Math.round(tickGapMax / 1000) +
-      's, GPS ngung ' + Math.round(gpsGapMax / 1000) + 's';
+      's, GPS ngung ' + Math.round(gpsGapMax / 1000) + 's, an ' + hiddenCount + ', video thu ' + (testTrack ? 'co' : 'khong');
   }, 500);
 }
 
