@@ -61,8 +61,14 @@
     color: var(--text); font-size: 15px; line-height: 29px; text-align: center; cursor: pointer;
   }
   #map .maplibregl-ctrl-group button#btn-sound.active { background: var(--accent-green); color: #fff; }
-  #map .maplibregl-ctrl-group button#btn-search, #map-pane > #map-tools #btn-search { background: #fff; color: #111; }
-  #btn-search svg { width: 17px; height: 17px; vertical-align: middle; }
+
+  /* Nút tìm kiếm và menu ở góc dưới bên trái */
+  #map-side { position: absolute; z-index: 1000; left: 10px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
+  .side-btn {
+    width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;
+    background: #fff; color: #222; border: none; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.45); cursor: pointer;
+  }
+  .side-btn svg { width: 20px; height: 20px; }
 
   /* Màn hình tìm địa điểm, phủ phần bản đồ. Ô nhập phải từ 26px, nhỏ hơn thì iPhone tự phóng to trên xe */
   #place-search {
@@ -76,14 +82,27 @@
     flex: 1; min-width: 0; box-sizing: border-box; height: 44px; padding: 0 12px;
     background: var(--bg); color: var(--text); border: 1.5px solid #2fe0e6; border-radius: 10px; outline: none; font-size: 26px;
   }
+  #place-shortcuts { display: flex; gap: 4px; padding: 0 8px 4px; flex: none; overflow-x: auto; scrollbar-width: none; }
+  #place-shortcuts::-webkit-scrollbar { display: none; }
+  #place-shortcuts.hidden { display: none; }
+  .place-shortcut { flex: none; width: 66px; padding: 2px 0; background: none; border: none; color: var(--text); cursor: pointer; }
+  .place-shortcut i { display: block; width: 38px; height: 38px; margin: 0 auto 2px; line-height: 38px; font-style: normal; font-size: 21px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; }
+  .place-shortcut span { display: block; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #place-list-head { display: flex; justify-content: space-between; align-items: center; padding: 2px 12px; flex: none; font-weight: 700; font-size: 15px; }
   #place-list-head.hidden { display: none; }
   #place-clear { background: none; border: none; color: var(--muted); font-size: 14px; padding: 6px 0; cursor: pointer; }
+  #place-clear.hidden { display: none; }
   #place-list { flex: 1; min-height: 0; overflow-y: auto; }
+  .place-row { display: flex; align-items: center; padding-left: 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .place-row > svg { flex: none; width: 20px; height: 20px; margin-right: 8px; color: var(--muted); }
   .place-item {
-    display: block; width: 100%; padding: 8px 12px; text-align: left; cursor: pointer;
-    background: none; border: none; border-bottom: 1px solid var(--border); color: var(--text);
+    flex: 1; min-width: 0; padding: 7px 0; text-align: left; cursor: pointer;
+    background: none; border: none; color: var(--text);
   }
+  .place-more { flex: none; width: 44px; height: 44px; background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+  .place-actions { flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px 0; }
+  .place-actions button { padding: 7px 12px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: 14px; cursor: pointer; }
+  .place-actions button.on { border-color: #2fe0e6; color: #2fe0e6; }
   .place-item b { display: block; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .place-item span { display: block; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #place-message { padding: 20px 12px; text-align: center; color: var(--muted); font-size: 15px; }
@@ -352,17 +371,24 @@
         <button type="button" id="place-back" title="Đóng">‹</button>
         <input id="place-input" type="search" placeholder="Tìm kiếm" autocomplete="off" enterkeyhint="search">
       </form>
+      <div id="place-shortcuts"></div>
       <div id="place-list-head" class="hidden">
-        <span>Lịch sử tìm kiếm</span>
+        <span id="place-list-title"></span>
         <button type="button" id="place-clear">Xoá lịch sử</button>
       </div>
       <div id="place-list"></div>
     </div>
 
-    <div id="map-tools" class="maplibregl-ctrl maplibregl-ctrl-group">
-      <button class="map-btn" id="btn-search" title="Tìm địa điểm">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><path d="M16 16l5 5"/></svg>
+    <div id="map-side">
+      <button class="side-btn" id="btn-search" title="Tìm địa điểm">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><path d="M16 16l5 5"/></svg>
       </button>
+      <button class="side-btn" id="btn-menu" title="Menu (sẽ thêm chức năng sau)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+
+    <div id="map-tools" class="maplibregl-ctrl maplibregl-ctrl-group">
       <button class="map-btn" id="btn-sound" title="Bật / tắt tiếng cảnh báo">🔔</button>
       <button class="map-btn" id="btn-expand-map" title="Phóng to bản đồ">⛶</button>
     </div>
@@ -435,6 +461,17 @@ const PLACE_ZOOM = 15;
 const PLACE_SAME_M = 100;           // hai kết quả cùng tên gần nhau hơn chừng này chỉ giữ một
 const PLACE_HISTORY_KEY = 'placeHistory';
 const PLACE_HISTORY_MAX = 8;
+const PLACE_SAVED_KEY = 'placeSaved';  // Nhà, Cơ quan, Yêu thích
+const PLACE_NEAR_DEG = 0.5;            // ô tìm sẵn chỉ tìm trong khoảng này quanh xe (khoảng 50 km)
+const PLACE_SHORTCUTS = [
+  { saved: 'home', icon: '🏠', label: 'Nhà' },
+  { saved: 'work', icon: '🏢', label: 'Cơ quan' },
+  { saved: 'favorites', icon: '❤️', label: 'Yêu thích' },
+  { query: 'xưởng dịch vụ VinFast', icon: '🔧', label: 'Xưởng DV' },
+  // Lọc đúng loại trạm sạc, nếu không dịch vụ trả cả tên đường có chữ gần giống
+  { query: 'trạm sạc', tag: 'amenity:charging_station', icon: '⚡', label: 'Trạm sạc' },
+  { query: 'VinFast', tag: 'shop:car', icon: '🚗', label: 'Showroom' }
+];
 const CAM_WARN_M = 500;        // camera phía trước trong khoảng này thì nhấp nháy cảnh báo
 const CAM_WARN_SIDE_M = 60;    // camera lệch sang ngang hơn chừng này là ở đường khác, không cảnh báo
 const CROSS_ROAD_M = 500;      // báo đường sắp cắt qua trong khoảng này
@@ -1710,17 +1747,74 @@ function savePlaceHistory(list) {
   } catch (e) {}
 }
 
-function showPlaceMessage(text) {
-  document.getElementById('place-list-head').classList.add('hidden');
+function placeSaved() {
+  try {
+    return JSON.parse(localStorage.getItem(PLACE_SAVED_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+function savePlaceSaved(saved) {
+  try {
+    localStorage.setItem(PLACE_SAVED_KEY, JSON.stringify(saved));
+  } catch (e) {}
+}
+function samePlace(a, b) {
+  return !!a && !!b && a.name === b.name && a.lat === b.lat && a.lon === b.lon;
+}
+
+function setPlaceHead(title, canClear) {
+  document.getElementById('place-list-head').classList.toggle('hidden', !title);
+  document.getElementById('place-list-title').textContent = title || '';
+  document.getElementById('place-clear').classList.toggle('hidden', !canClear);
+}
+function showPlaceMessage(text, title) {
+  setPlaceHead(title);
   placeList.innerHTML = '';
   const el = document.createElement('div');
   el.id = 'place-message';
   el.textContent = text;
   placeList.appendChild(el);
 }
-function showPlaces(places) {
+
+// Hàng nút hiện ra khi bấm ⋯: lưu Nhà, Cơ quan, Yêu thích, hoặc xoá khỏi lịch sử
+function placeActions(place, isHistory, refresh) {
+  const saved = placeSaved();
+  const box = document.createElement('div');
+  box.className = 'place-actions';
+  const add = (label, on, action) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.classList.toggle('on', on);
+    b.addEventListener('click', () => { action(); refresh(); });
+    box.appendChild(b);
+  };
+  const toggleSlot = slot => {
+    const next = placeSaved();
+    next[slot] = samePlace(next[slot], place) ? null : place;
+    savePlaceSaved(next);
+  };
+  add('🏠 Nhà', samePlace(saved.home, place), () => toggleSlot('home'));
+  add('🏢 Cơ quan', samePlace(saved.work, place), () => toggleSlot('work'));
+  const liked = (saved.favorites || []).some(o => samePlace(o, place));
+  add(liked ? '❤️ Bỏ thích' : '❤️ Yêu thích', liked, () => {
+    const next = placeSaved();
+    const rest = (next.favorites || []).filter(o => !samePlace(o, place));
+    next.favorites = liked ? rest : [place, ...rest];
+    savePlaceSaved(next);
+  });
+  if (isHistory) add('Xoá', false, () => savePlaceHistory(placeHistory().filter(o => !samePlace(o, place))));
+  return box;
+}
+
+const CLOCK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5"/><path d="M3.5 4v4.5H8"/><path d="M12 7.5V12l3 2"/></svg>';
+function showPlaces(places, isHistory, refresh) {
   placeList.innerHTML = '';
-  for (const place of places) {
+  places.forEach((place, i) => {
+    const row = document.createElement('div');
+    row.className = 'place-row';
+    if (isHistory) row.insertAdjacentHTML('beforeend', CLOCK_ICON);
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'place-item';
@@ -1730,14 +1824,82 @@ function showPlaces(places) {
     detail.textContent = place.detail;
     item.append(title, detail);
     item.addEventListener('click', () => choosePlace(place));
-    placeList.appendChild(item);
-  }
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'place-more';
+    more.textContent = '⋯';
+    more.title = 'Lưu địa điểm';
+    more.addEventListener('click', () => {
+      const open = row.querySelector('.place-actions');
+      if (open) return open.remove();
+      row.appendChild(placeActions(place, isHistory, () => {
+        refresh();
+        // Vẽ lại danh sách xong thì mở lại hàng nút, trừ khi dòng này vừa bị xoá
+        const again = placeList.children[i];
+        const title = again && again.querySelector('b');
+        if (title && title.textContent === place.name) again.querySelector('.place-more').click();
+      }));
+    });
+    row.append(item, more);
+    placeList.appendChild(row);
+  });
 }
 function showPlaceHistory() {
   const history = placeHistory();
   if (!history.length) return showPlaceMessage('Gõ tên đường hoặc địa điểm để tìm');
-  document.getElementById('place-list-head').classList.remove('hidden');
-  showPlaces(history);
+  setPlaceHead('Lịch sử tìm kiếm', true);
+  showPlaces(history, true, showPlaceHistory);
+}
+function showFavorites() {
+  placeToken++;
+  const favorites = placeSaved().favorites || [];
+  if (!favorites.length) return showPlaceMessage('Chưa có. Tìm địa điểm rồi bấm ⋯ để thêm vào Yêu thích', 'Yêu thích');
+  setPlaceHead('Yêu thích');
+  showPlaces(favorites, false, showFavorites);
+}
+function openShortcut(shortcut) {
+  if (shortcut.saved === 'favorites') return showFavorites();
+  if (shortcut.saved) {
+    placeToken++;
+    const place = placeSaved()[shortcut.saved];
+    if (place) return choosePlace(place);
+    return showPlaceMessage('Chưa lưu ' + shortcut.label + '. Tìm địa điểm rồi bấm ⋯ để lưu', shortcut.label);
+  }
+  if (!lastPoint) return showPlaceMessage('Cần có GPS để tìm ' + shortcut.label + ' gần xe', shortcut.label);
+  findNearby(shortcut);
+}
+async function findNearby(shortcut) {
+  const token = ++placeToken;
+  showPlaceMessage('Đang tìm…', shortcut.label);
+  const lat = Math.round(lastPoint.lat * 10) / 10, lon = Math.round(lastPoint.lon * 10) / 10;
+  const box = [lon - PLACE_NEAR_DEG, lat - PLACE_NEAR_DEG, lon + PLACE_NEAR_DEG, lat + PLACE_NEAR_DEG].map(v => v.toFixed(1)).join(',');
+  let url = 'https://photon.komoot.io/api/?limit=8&bbox=' + box + '&lat=' + lat.toFixed(1) + '&lon=' + lon.toFixed(1) + '&q=' + encodeURIComponent(shortcut.query);
+  if (shortcut.tag) url += '&osm_tag=' + shortcut.tag;
+  try {
+    const places = await fetchPlaces(url);
+    if (token !== placeToken) return;
+    if (!places.length) return showPlaceMessage('Chưa có dữ liệu ' + shortcut.label + ' trong khoảng 50 km quanh xe', shortcut.label);
+    places.sort((a, b) => distanceM(lastPoint.lat, lastPoint.lon, a.lat, a.lon) - distanceM(lastPoint.lat, lastPoint.lon, b.lat, b.lon));
+    const render = () => {
+      setPlaceHead(shortcut.label);
+      showPlaces(places, false, render);
+    };
+    render();
+  } catch (e) {
+    if (token === placeToken) showPlaceMessage('Không tìm được, hãy kiểm tra mạng rồi thử lại', shortcut.label);
+  }
+}
+for (const shortcut of PLACE_SHORTCUTS) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'place-shortcut';
+  const icon = document.createElement('i');
+  icon.textContent = shortcut.icon;
+  const label = document.createElement('span');
+  label.textContent = shortcut.label;
+  b.append(icon, label);
+  b.addEventListener('click', () => openShortcut(shortcut));
+  document.getElementById('place-shortcuts').appendChild(b);
 }
 
 function toPlace(feature) {
@@ -1750,25 +1912,33 @@ function toPlace(feature) {
   return { name, detail: parts.filter((part, i) => parts.indexOf(part) === i).join(', '), lat, lon };
 }
 
+async function fetchPlaces(url) {
+  const r = await fetchWithTimeout(url, 10000);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const data = await r.json();
+  const places = [];
+  for (const place of data.features.map(toPlace)) {
+    if (!place) continue;
+    if (places.some(o => o.name === place.name && distanceM(o.lat, o.lon, place.lat, place.lon) < PLACE_SAME_M)) continue;
+    places.push(place);
+  }
+  return places;
+}
+
 async function searchPlaces() {
   const q = placeInput.value.trim();
   const token = ++placeToken;
+  // Đang gõ thì ẩn các ô tắt để có chỗ cho kết quả, màn hình xe rất thấp
+  document.getElementById('place-shortcuts').classList.toggle('hidden', !!q);
   if (!q) return showPlaceHistory();
-  document.getElementById('place-list-head').classList.add('hidden');
+  setPlaceHead(null);
   let url = PLACE_SEARCH_URL + '&q=' + encodeURIComponent(q);
   if (lastPoint) url += '&lat=' + lastPoint.lat.toFixed(1) + '&lon=' + lastPoint.lon.toFixed(1);
   try {
-    const r = await fetchWithTimeout(url, 10000);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const data = await r.json();
+    const places = await fetchPlaces(url);
     if (token !== placeToken) return;
-    const places = [];
-    for (const place of data.features.map(toPlace)) {
-      if (!place) continue;
-      if (places.some(o => o.name === place.name && distanceM(o.lat, o.lon, place.lat, place.lon) < PLACE_SAME_M)) continue;
-      places.push(place);
-    }
-    if (places.length) showPlaces(places);
+    const render = () => showPlaces(places, false, render);
+    if (places.length) render();
     else showPlaceMessage('Không tìm thấy địa điểm này');
   } catch (e) {
     if (token === placeToken) showPlaceMessage('Không tìm được, hãy kiểm tra mạng rồi thử lại');
@@ -1779,6 +1949,7 @@ function openPlaceSearch() {
   document.getElementById('place-search').classList.remove('hidden');
   placeInput.value = '';
   placeToken++;
+  document.getElementById('place-shortcuts').classList.remove('hidden');
   showPlaceHistory();
   placeInput.focus();
 }
@@ -1834,6 +2005,8 @@ function clearPlace() {
 }
 
 document.getElementById('btn-search').addEventListener('click', openPlaceSearch);
+// Nút để dành, chưa có chức năng
+document.getElementById('btn-menu').addEventListener('click', () => setStatus('Menu sẽ có chức năng sau'));
 document.getElementById('place-back').addEventListener('click', closePlaceSearch);
 document.getElementById('place-chip-close').addEventListener('click', clearPlace);
 document.getElementById('place-clear').addEventListener('click', function () {
