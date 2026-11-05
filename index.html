@@ -69,6 +69,9 @@
     background: #fff; color: #222; border: none; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.45); cursor: pointer;
   }
   .side-btn svg { width: 20px; height: 20px; }
+  /* Nút về xe nằm trên cùng cột nút bên phải, rộng bằng cột. Không có bản đồ thì không cần nút này */
+  #btn-locate { width: 31px; height: 31px; border-radius: 8px; }
+  #map-pane > #btn-locate { display: none; }
 
   /* Màn hình tìm địa điểm, phủ phần bản đồ. Ô nhập phải từ 26px, nhỏ hơn thì iPhone tự phóng to trên xe */
   #place-search {
@@ -379,6 +382,10 @@
       <div id="place-list"></div>
     </div>
 
+    <button class="side-btn maplibregl-ctrl" id="btn-locate" title="Về vị trí xe">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#1e88ff" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2.6" fill="#1e88ff" stroke="none"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
+
     <div id="map-side">
       <button class="side-btn" id="btn-search" title="Tìm địa điểm">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><path d="M16 16l5 5"/></svg>
@@ -658,6 +665,7 @@ try {
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
   // Thêm sau nên nằm ngay trên nút + −, luôn thẳng cột dù dòng ghi nguồn có xuống hàng
   map.addControl({ onAdd: () => document.getElementById('map-tools'), onRemove: () => {} }, 'bottom-right');
+  map.addControl({ onAdd: () => document.getElementById('btn-locate'), onRemove: () => {} }, 'bottom-right');
 } catch (e) {
   map = null;
   document.getElementById('map').innerHTML =
@@ -2004,6 +2012,16 @@ function clearPlace() {
   moveCamera(false);
 }
 
+// Về ngay vị trí xe, đúng mức phóng khi chạy. Ghim địa điểm vẫn giữ trên bản đồ
+document.getElementById('btn-locate').addEventListener('click', function () {
+  if (!map) return;
+  if (!carPos) return setStatus('Chưa có vị trí GPS');
+  clearTimeout(followTimer);
+  follow = true;
+  glide = null;
+  map.setZoom(NAV_ZOOM);
+  moveCamera(true);
+});
 document.getElementById('btn-search').addEventListener('click', openPlaceSearch);
 // Nút để dành, chưa có chức năng
 document.getElementById('btn-menu').addEventListener('click', () => setStatus('Menu sẽ có chức năng sau'));
