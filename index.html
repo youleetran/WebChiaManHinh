@@ -110,15 +110,46 @@
   .place-item span { display: block; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #place-message { padding: 20px 12px; text-align: center; color: var(--muted); font-size: 15px; }
 
-  /* Điểm đang xem, nằm ngay trên tên đường */
-  #place-chip {
-    position: absolute; z-index: 1000; left: 50%; bottom: 56px; transform: translateX(-50%); max-width: 70%;
-    display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 12px;
-    background: #0a0a0c; color: #fff; border-radius: 16px; font-size: 14px; font-weight: 600;
+  /* Chi tiết địa điểm sau khi chọn kết quả tìm kiếm */
+  #place-detail {
+    position: absolute; z-index: 1100; left: 0; right: 0; bottom: 0; padding: 8px 12px 10px;
+    background: var(--panel); color: var(--text); border-radius: 14px 14px 0 0; box-shadow: 0 -3px 10px rgba(0,0,0,0.45);
   }
-  #place-chip.hidden { display: none; }
-  #place-chip-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #place-chip-close { flex: none; width: 28px; height: 28px; background: none; border: none; color: #fff; font-size: 15px; cursor: pointer; }
+  #place-detail.hidden { display: none; }
+  #place-detail-name { font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #place-detail-info { font-size: 13px; color: var(--muted); margin: 2px 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #place-detail-actions { display: flex; gap: 8px; }
+  #place-detail-actions button { height: 40px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  #place-route { flex: 1; background: #12c2e9; color: #06222b; border: none; }
+  #place-start { flex: 1; background: none; color: #2fe0e6; border: 1.5px solid #2fe0e6; }
+  #place-like { flex: none; width: 44px; background: var(--bg); color: var(--text); border: 1px solid var(--border); font-size: 18px; }
+  .detail-top { position: absolute; z-index: 1100; top: 10px; width: 36px; height: 36px; padding: 0; background: #fff; color: #222; border: none; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.45); font-size: 20px; cursor: pointer; }
+  .detail-top.hidden { display: none; }
+  #place-detail-back { left: 10px; font-size: 26px; line-height: 30px; }
+  #place-detail-close { right: 10px; }
+  /* Lúc xem chi tiết chỉ để lại bản đồ và phần trên */
+  #map-pane.place-detail #speed-overlay, #map-pane.place-detail #cross-road, #map-pane.place-detail #junction,
+  #map-pane.place-detail #cam-warning, #map-pane.place-detail #map-side, #map-pane.place-detail #gps-status,
+  #map-pane.place-detail #speed-glow, #map-pane.place-detail .maplibregl-ctrl-bottom-right { display: none; }
+
+  /* Lúc đang dẫn đường: khung rẽ rộng tới sát bảng tốc độ, thanh giờ tới ở dưới */
+  #map-pane.nav #cross-road { width: calc(100% - 140px); height: 52px; }
+  #map-pane.nav #cross-road > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1; }
+  #map-pane.nav #cross-road-dist { flex: none; font-size: 22px; }
+  #map-pane.nav #cross-road-name { font-size: 16px; max-width: none; min-width: 0; }
+  #map-pane.nav #map-side { display: none; }
+  #map-pane.nav #gps-status { bottom: 58px; }
+  #nav-bar {
+    position: absolute; z-index: 1000; left: 10px; right: 52px; bottom: 16px; height: 36px; box-sizing: border-box;
+    display: flex; align-items: center; padding: 0 2px 0 12px; background: #0a0a0c; color: #fff; border-radius: 10px;
+  }
+  #nav-bar.hidden { display: none; }
+  /* Lớp video đã vẽ thanh này, chỉ giữ nút ✕ trong suốt nằm trên để bấm */
+  #map-pane.mirror #nav-bar { background: transparent; }
+  #map-pane.mirror #nav-bar-text { visibility: hidden; }
+  #map-pane.mirror #nav-stop { color: transparent; }
+  #nav-bar-text { flex: 1; min-width: 0; text-align: center; font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #nav-stop { flex: none; width: 34px; height: 34px; background: none; border: none; color: #fff; font-size: 16px; cursor: pointer; }
 
   /* Tên đường đang chạy, nằm giữa phía dưới như app dẫn đường */
   #gps-status {
@@ -364,9 +395,21 @@
       <span id="cam-warning-text"></span>
     </div>
 
-    <div id="place-chip" class="hidden">
-      <span id="place-chip-text"></span>
-      <button id="place-chip-close" title="Bỏ điểm này và quay về xe">✕</button>
+    <div id="nav-bar" class="hidden">
+      <span id="nav-bar-text"></span>
+      <button id="nav-stop" title="Dừng dẫn đường">✕</button>
+    </div>
+
+    <button id="place-detail-back" class="detail-top hidden" title="Quay lại kết quả">‹</button>
+    <button id="place-detail-close" class="detail-top hidden" title="Đóng">✕</button>
+    <div id="place-detail" class="hidden">
+      <div id="place-detail-name"></div>
+      <div id="place-detail-info"></div>
+      <div id="place-detail-actions">
+        <button id="place-route">Xem lộ trình</button>
+        <button id="place-start">▲ Bắt đầu</button>
+        <button id="place-like" title="Yêu thích">♡</button>
+      </div>
     </div>
 
     <div id="place-search" class="hidden">
@@ -462,6 +505,16 @@ const ROAD_DATA_URL = 'data/roads/';
 const SIGN_DATA_URL = 'data/signs/';
 const CAM_DATA_URL = 'data/cams/';
 const PLACE_SEARCH_URL = 'https://photon.komoot.io/api/?limit=8&bbox=102,8,110,24';  // chỉ tìm trong Việt Nam
+const NAV_ROUTE_URL = 'https://router.project-osrm.org/route/v1/driving/';
+const NAV_OFF_ROUTE_M = 50;    // xe lệch tuyến quá chừng này
+const NAV_OFF_ROUTE_FIXES = 2; // trong từng này lần GPS liên tiếp thì tính lại tuyến
+const NAV_RETRY_MS = 15000;    // hai lần tính tuyến cách nhau ít nhất chừng này
+const NAV_ARRIVE_M = 40;       // cách điểm đến chừng này thì coi như đã tới
+const NAV_SEARCH_AHEAD_M = 600; // chỉ dò vị trí xe trong đoạn tuyến phía trước, vì tuyến có thể đi qua một chỗ hai lần
+const NAV_TURN_ANGLES = {       // góc mũi tên theo hướng rẽ
+  straight: 0, 'slight left': -35, left: -90, 'sharp left': -135,
+  'slight right': 35, right: 90, 'sharp right': 135, uturn: 180
+};
 const PLACE_SEARCH_DELAY_MS = 500;  // ngừng gõ chừng này mới tìm, đỡ gửi nhiều yêu cầu
 const PLACE_VIEW_MS = 30000;        // xem điểm tìm được chừng này thì bản đồ tự quay về xe (lúc khóa máy không bấm được)
 const PLACE_ZOOM = 15;
@@ -567,7 +620,8 @@ const NAV_MAP_STYLE = {
     osm: { type: 'vector', url: MAP_TILES_URL },
     'current-road': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
     signs: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
-    'search-place': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
+    'search-place': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+    'nav-route': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
   },
   layers: [
     { id: 'background', type: 'background', paint: { 'background-color': '#242f3e' } },
@@ -594,6 +648,19 @@ const NAV_MAP_STYLE = {
     { id: 'current-road', type: 'line', source: 'current-road',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': '#4d9bff', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 3, 16, 7, 18, 14] } },
+    { id: 'nav-route-edge', type: 'line', source: 'nav-route',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#0b6fa8', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 5, 16, 12, 18, 20] } },
+    { id: 'nav-route', type: 'line', source: 'nav-route',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#2fd2ff', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 16, 8, 18, 15] } },
+    { id: 'nav-route-arrow', type: 'symbol', source: 'nav-route', minzoom: 14,
+      layout: {
+        'symbol-placement': 'line', 'symbol-spacing': 90,
+        'text-field': '›', 'text-font': ['Noto Sans Regular'], 'text-size': 18,
+        'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true
+      },
+      paint: { 'text-color': '#ffffff' } },
     { id: 'road-name', type: 'symbol', source: 'osm', 'source-layer': 'transportation_name', minzoom: 12,
       layout: {
         'symbol-placement': 'line',
@@ -1005,6 +1072,9 @@ function drawMirrorSpeedGlow(ctx, width, height) {
   ctx.globalAlpha = 1;
 }
 function drawMirrorOverlay(ctx, width, height) {
+  const pane = document.getElementById('map-pane');
+  if (pane.classList.contains('place-detail')) return;   // đang xem chi tiết địa điểm, chỉ cần bản đồ
+  const navMode = pane.classList.contains('nav');
   if (!document.getElementById('speed-glow').classList.contains('hidden')) drawMirrorSpeedGlow(ctx, width, height);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -1042,22 +1112,32 @@ function drawMirrorOverlay(ctx, width, height) {
   // Đường sắp cắt qua, cùng vị trí với #cross-road
   if (!document.getElementById('cross-road').classList.contains('hidden')) {
     ctx.beginPath();
-    ctx.roundRect(10, 10, 176, 56, 10);
+    ctx.roundRect(10, 10, navMode ? width - 140 : 176, navMode ? 52 : 56, 10);
     ctx.fillStyle = 'rgba(14,17,22,0.92)';
     ctx.fill();
+    // Mũi tên xoay theo hướng rẽ khi đang dẫn đường, góc lưu ở #cross-road
+    ctx.save();
+    ctx.translate(31, navMode ? 36 : 38);
+    const crossAngle = Number(document.getElementById('cross-road').dataset.angle || 0);
+    ctx.rotate(crossAngle * Math.PI / 180);
+    if (crossAngle) ctx.scale(0.85, 0.85);
     ctx.fillStyle = '#4d9bff';
-    ctx.fill(new Path2D('M31 18 L43 34 H35 V56 H27 V34 H19 Z'));
+    ctx.fill(new Path2D('M0 -20 L12 -4 H4 V18 H-4 V-4 H-12 Z'));
+    ctx.restore();
     ctx.textAlign = 'left';
     ctx.fillStyle = '#fff';
-    ctx.font = '800 19px Arial, sans-serif';
-    ctx.fillText(document.getElementById('cross-road-dist').textContent, 52, 28);
+    ctx.font = '800 ' + (navMode ? 22 : 19) + 'px Arial, sans-serif';
+    const crossDist = document.getElementById('cross-road-dist').textContent;
+    ctx.fillText(crossDist, 52, navMode ? 37 : 28);
+    const nameX = navMode ? 52 + ctx.measureText(crossDist).width + 8 : 52;
+    const nameW = navMode ? width - 130 - 8 - nameX : 126;
     let crossName = document.getElementById('cross-road-name').textContent;
-    ctx.font = '13px Arial, sans-serif';
-    if (ctx.measureText(crossName).width > 126) {
-      while (crossName.length > 1 && ctx.measureText(crossName + '…').width > 126) crossName = crossName.slice(0, -1);
+    ctx.font = navMode ? '16px Arial, sans-serif' : '13px Arial, sans-serif';
+    if (ctx.measureText(crossName).width > nameW) {
+      while (crossName.length > 1 && ctx.measureText(crossName + '…').width > nameW) crossName = crossName.slice(0, -1);
       crossName += '…';
     }
-    ctx.fillText(crossName, 52, 49);
+    ctx.fillText(crossName, nameX, navMode ? 37 : 49);
     ctx.textAlign = 'center';
   }
   // Các hướng đi ở ngã phía trước, cùng vị trí với #junction
@@ -1091,13 +1171,25 @@ function drawMirrorOverlay(ctx, width, height) {
     name += '…';
   }
   const w = ctx.measureText(name).width + 28;
-  const y = height - 22 - 28;
+  const y = height - (navMode ? 58 : 22) - 28;
   ctx.beginPath();
   ctx.roundRect(width / 2 - w / 2, y, w, 28, 14);
   ctx.fillStyle = '#0a0a0c';
   ctx.fill();
   ctx.fillStyle = '#2fe0e6';
   ctx.fillText(name, width / 2, y + 15);
+  // Thanh giờ tới, cùng vị trí với #nav-bar
+  if (navMode && !document.getElementById('nav-bar').classList.contains('hidden')) {
+    const barW = width - 62, barY = height - 16 - 36;
+    ctx.beginPath();
+    ctx.roundRect(10, barY, barW, 36, 10);
+    ctx.fillStyle = '#0a0a0c';
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 16px Arial, sans-serif';
+    ctx.fillText(document.getElementById('nav-bar-text').textContent, 10 + (barW - 34) / 2, barY + 19);
+    ctx.fillText('✕', 10 + barW - 18, barY + 19);
+  }
 }
 function drawMirror(force) {
   if (!mirrorTrack) return;
@@ -1476,6 +1568,7 @@ function drawJunction(exits) {
 }
 
 function updateCrossRoad(match) {
+  if (navActive) return;   // đang dẫn đường thì khung này báo hướng rẽ
   const cross = match ? nextCrossRoad(match) : null;
   document.getElementById('cross-road').classList.toggle('hidden', !cross);
   const showJunction = !!cross && cross.dist <= JUNCTION_WARN_M && cross.exits.length >= JUNCTION_MIN_EXITS;
@@ -1735,7 +1828,7 @@ function updateCameraWarning(lat, lon, heading) {
 
 /* ---------- Tìm địa điểm ----------
    Gửi chữ bạn gõ tới Photon (dữ liệu OpenStreetMap). Để ưu tiên nơi gần xe, chỉ gửi vị trí làm tròn
-   tới 0,1 độ (khoảng 11 km), không gửi vị trí chính xác. Chỉ đưa tới xem điểm, chưa có dẫn đường. */
+   tới 0,1 độ (khoảng 11 km), không gửi vị trí chính xác. Chọn một điểm thì bắt đầu dẫn đường, xem phần dưới. */
 const placeInput = document.getElementById('place-input');
 const placeList = document.getElementById('place-list');
 let placeTimer = null;
@@ -1968,11 +2061,212 @@ function closePlaceSearch() {
   document.getElementById('place-search').classList.add('hidden');
 }
 
-function renderPlaceChip() {
+function formatDistance(m) {
+  return m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km';
+}
+
+/* ---------- Dẫn đường ----------
+   Tính tuyến bằng OSRM (dữ liệu OpenStreetMap). Dịch vụ cần vị trí chính xác của xe và điểm đến.
+   Tuyến và ghim vẽ trong bản đồ, khung hướng rẽ vẽ cả trên lớp video, nên lúc khóa máy vẫn thấy. */
+let navRoute = null;      // { points, lengths, total, duration, steps }
+let navActive = false;    // đã bấm Bắt đầu
+let navArrived = false;
+let navSegment = 0;       // đoạn tuyến xe đang đi
+let navOffFixes = 0;
+let navRequesting = false;
+let navRetryAt = 0;
+let navFailed = false;
+let navPreview = false;   // đã bấm Xem lộ trình, đang xem toàn tuyến
+
+function renderNavBar(remainM) {
   if (!currentPlace) return;
-  const here = lastPoint ? distanceM(lastPoint.lat, lastPoint.lon, currentPlace.lat, currentPlace.lon) : null;
-  const dist = here == null ? '' : (here < 1000 ? Math.round(here / 10) * 10 + ' m' : (here / 1000).toFixed(1).replace('.', ',') + ' km') + ' · ';
-  document.getElementById('place-chip-text').textContent = dist + currentPlace.name;
+  let text;
+  if (navArrived) {
+    text = 'Đã tới · ' + currentPlace.name;
+  } else if (navRoute && remainM != null) {
+    const seconds = navRoute.duration * remainM / navRoute.total;
+    const arrive = new Date(Date.now() + seconds * 1000);
+    const clock = String(arrive.getHours()).padStart(2, '0') + ':' + String(arrive.getMinutes()).padStart(2, '0');
+    text = clock + ' · ' + Math.max(1, Math.round(seconds / 60)) + ' phút · ' + formatDistance(remainM);
+  } else {
+    text = navFailed ? 'Chưa có tuyến, đang thử lại' : 'Đang tính tuyến…';
+  }
+  document.getElementById('nav-bar-text').textContent = text;
+}
+
+// Dòng khoảng cách trong khung chi tiết địa điểm
+function renderPlaceInfo(message) {
+  if (!currentPlace) return;
+  const here = lastPoint ? formatDistance(distanceM(lastPoint.lat, lastPoint.lon, currentPlace.lat, currentPlace.lon)) : '';
+  let extra = here;
+  if (navRoute) extra = formatDistance(navRoute.total) + ' · ' + Math.max(1, Math.round(navRoute.duration / 60)) + ' phút';
+  document.getElementById('place-detail-info').textContent = [message || extra, currentPlace.detail].filter(Boolean).join(' · ');
+}
+function renderPlaceLike() {
+  const liked = (placeSaved().favorites || []).some(o => samePlace(o, currentPlace));
+  document.getElementById('place-like').textContent = liked ? '♥' : '♡';
+}
+
+function setRouteLine(coordinates) {
+  const source = map && map.getSource('nav-route');
+  if (source) source.setData(coordinates ? { type: 'Feature', geometry: { type: 'LineString', coordinates } } : { type: 'FeatureCollection', features: [] });
+}
+
+function showGuidance(angle, dist, name) {
+  const box = document.getElementById('cross-road');
+  box.dataset.angle = angle;
+  // Thu nhỏ khi xoay để mũi tên nằm ngang không chạm chữ
+  box.querySelector('svg').style.transform = angle ? 'rotate(' + angle + 'deg) scale(0.85)' : '';
+  box.classList.remove('hidden');
+  document.getElementById('junction').classList.add('hidden');
+  document.getElementById('cross-road-dist').textContent = dist;
+  document.getElementById('cross-road-name').textContent = name;
+}
+function resetGuidance() {
+  const box = document.getElementById('cross-road');
+  box.dataset.angle = 0;
+  box.querySelector('svg').style.transform = '';
+  box.classList.add('hidden');
+}
+
+// Bỏ các bước không cần làm gì: đi thẳng mà chỉ đổi tên đường, ra khỏi vòng xoay
+function isGuidanceStep(step) {
+  const type = step.maneuver.type, modifier = step.maneuver.modifier;
+  if (type === 'depart' || type === 'new name' || type === 'exit roundabout' || type === 'exit rotary') return false;
+  if (type === 'continue' && modifier === 'straight') return false;
+  return true;
+}
+function stepLabel(step) {
+  const type = step.maneuver.type;
+  if (type === 'arrive') return 'Điểm đến';
+  if (type === 'roundabout' || type === 'rotary') return 'Vòng xoay, lối ' + (step.maneuver.exit || 1);
+  if (step.name) return step.name;
+  const modifier = step.maneuver.modifier || '';
+  if (modifier === 'uturn') return 'Quay đầu';
+  if (modifier.includes('left')) return 'Rẽ trái';
+  if (modifier.includes('right')) return 'Rẽ phải';
+  return 'Đi thẳng';
+}
+
+// Thu bản đồ để thấy cả tuyến, chừa chỗ cho khung chi tiết ở dưới
+function fitRoute(coordinates) {
+  const bounds = coordinates.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coordinates[0], coordinates[0]));
+  // Bỏ khoảng đệm đang có trước: nó cộng dồn với khoảng đệm bên dưới, thiếu chỗ thì bản đồ im lặng không làm gì
+  map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
+  map.fitBounds(bounds, { padding: { top: 50, bottom: 140, left: 50, right: 50 }, pitch: 0, bearing: 0, duration: 600, maxZoom: NAV_ZOOM });
+}
+
+async function fetchRoute(lat, lon, heading, place) {
+  const base = NAV_ROUTE_URL + lon.toFixed(5) + ',' + lat.toFixed(5) + ';' + place.lon.toFixed(5) + ',' + place.lat.toFixed(5) + '?overview=full&geometries=geojson&steps=true';
+  // Thử theo hướng xe đang chạy để khỏi bắt quay đầu, không được thì bỏ điều kiện này
+  for (const url of heading != null ? [base + '&bearings=' + Math.round(heading) + ',45;', base] : [base]) {
+    const r = await fetchWithTimeout(url, 15000);
+    if (!r.ok) continue;
+    const data = await r.json();
+    if (data.code === 'Ok' && data.routes && data.routes[0]) return data.routes[0];
+  }
+  throw new Error('Không có tuyến');
+}
+
+async function requestRoute(lat, lon, heading) {
+  const place = currentPlace;
+  const now = Date.now();
+  if (navRequesting || now < navRetryAt) return;
+  navRequesting = true;
+  navRetryAt = now + NAV_RETRY_MS;
+  try {
+    const route = await fetchRoute(lat, lon, heading, place);
+    if (place !== currentPlace) return;
+    const coordinates = route.geometry.coordinates;
+    const points = coordinates.map(c => [c[1], c[0]]);
+    const lengths = [0];
+    for (let i = 0; i + 1 < points.length; i++) lengths.push(lengths[i] + distanceM(points[i][0], points[i][1], points[i + 1][0], points[i + 1][1]));
+    // Mỗi bước rẽ nằm ở đâu trên tuyến, tính theo quãng đường từ đầu tuyến
+    let along = 0;
+    const steps = route.legs[0].steps.map(step => {
+      const item = { ...step, atM: along };
+      along += step.distance;
+      return item;
+    });
+    navRoute = { points, lengths, total: lengths[lengths.length - 1], duration: route.duration, steps: steps.filter(isGuidanceStep) };
+    navSegment = 0;
+    navOffFixes = 0;
+    navFailed = false;
+    setRouteLine(coordinates);
+    if (navPreview && map) {
+      fitRoute(coordinates);
+    }
+    renderPlaceInfo();
+    updateNav(lat, lon);
+  } catch (e) {
+    if (place === currentPlace) {
+      navFailed = true;
+      renderPlaceInfo('Chưa tìm được tuyến, hãy thử lại');
+      renderNavBar();
+    }
+  } finally {
+    navRequesting = false;
+  }
+}
+
+function arriveAtPlace() {
+  navRoute = null;
+  navArrived = true;
+  setRouteLine(null);
+  showGuidance(0, 'Đã tới nơi', currentPlace.name);
+  renderNavBar();
+}
+
+// Gọi mỗi lần có GPS: tìm xe đang ở đâu trên tuyến rồi báo bước rẽ kế tiếp
+function updateNav(lat, lon, heading) {
+  if (!currentPlace || !navActive || navArrived) {
+    if (currentPlace && !navActive) renderPlaceInfo();
+    return;
+  }
+  if (distanceM(lat, lon, currentPlace.lat, currentPlace.lon) <= NAV_ARRIVE_M) return arriveAtPlace();
+  if (!navRoute) {
+    renderNavBar();
+    requestRoute(lat, lon, heading);
+    return;
+  }
+  const { points, lengths, total, steps } = navRoute;
+  const cosLat = Math.cos(lat * Math.PI / 180);
+  let best = null;
+  for (let i = Math.max(0, navSegment - 1); i + 1 < points.length && lengths[i] <= lengths[navSegment] + NAV_SEARCH_AHEAD_M; i++) {
+    const ax = (points[i][1] - lon) * 111320 * cosLat, ay = (points[i][0] - lat) * 111320;
+    const bx = (points[i + 1][1] - lon) * 111320 * cosLat, by = (points[i + 1][0] - lat) * 111320;
+    const sx = bx - ax, sy = by - ay, len2 = sx * sx + sy * sy;
+    if (!len2) continue;
+    const t = Math.max(0, Math.min(1, -(ax * sx + ay * sy) / len2));
+    const dist = Math.hypot(ax + t * sx, ay + t * sy);
+    if (!best || dist < best.dist) {
+      best = { dist, segment: i, along: lengths[i] + t * Math.sqrt(len2), lat: points[i][0] + t * (points[i + 1][0] - points[i][0]), lon: points[i][1] + t * (points[i + 1][1] - points[i][1]) };
+    }
+  }
+  if (!best || best.dist > NAV_OFF_ROUTE_M) {
+    navOffFixes++;
+    if (navOffFixes >= NAV_OFF_ROUTE_FIXES) requestRoute(lat, lon, heading);
+    return;
+  }
+  navOffFixes = 0;
+  navSegment = best.segment;
+  // Chỉ vẽ phần tuyến còn lại
+  setRouteLine([[best.lon, best.lat], ...points.slice(best.segment + 1).map(p => [p[1], p[0]])]);
+  const next = steps.find(step => step.atM > best.along) || steps[steps.length - 1];
+  const modifier = next.maneuver.modifier;
+  const angle = next.maneuver.type === 'arrive' ? 0 : (NAV_TURN_ANGLES[modifier] || 0);
+  showGuidance(angle, formatDistance(Math.max(0, next.atM - best.along)), stepLabel(next));
+  renderNavBar(Math.max(0, total - best.along));
+}
+
+// Về xe ngay và đi theo tuyến
+function goToCar() {
+  clearTimeout(followTimer);
+  follow = true;
+  if (!map || !carPos) return;
+  glide = null;
+  map.setZoom(NAV_ZOOM);
+  moveCamera(true);
 }
 
 function setPlacePin(place) {
@@ -1985,48 +2279,118 @@ function setPlacePin(place) {
   }] : [] });
 }
 
-function choosePlace(place) {
-  savePlaceHistory([place, ...placeHistory().filter(o => o.name !== place.name || o.lat !== place.lat || o.lon !== place.lon)].slice(0, PLACE_HISTORY_MAX));
-  closePlaceSearch();
-  currentPlace = place;
-  renderPlaceChip();
-  document.getElementById('place-chip').classList.remove('hidden');
-  setPlacePin(place);
-  if (!map) return;
+function setPlaceDetail(open) {
+  document.getElementById('map-pane').classList.toggle('place-detail', open);
+  for (const id of ['place-detail', 'place-detail-back', 'place-detail-close']) {
+    document.getElementById(id).classList.toggle('hidden', !open);
+  }
+}
+function focusPlace() {
+  if (!map || !currentPlace) return;
   follow = false;
   glide = null;
-  map.easeTo({ center: [place.lon, place.lat], zoom: PLACE_ZOOM, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 600 });
-  // Xem một lúc rồi tự về xe, ghim vẫn còn trên bản đồ
+  map.easeTo({ center: [currentPlace.lon, currentPlace.lat], zoom: PLACE_ZOOM, pitch: 0, bearing: 0, padding: { top: 40, bottom: 130, left: 0, right: 0 }, duration: 600 });
+}
+// Không bấm gì một lúc thì đóng và về xe, vì lúc khóa máy không bấm được
+function closeDetailLater() {
   clearTimeout(followTimer);
-  followTimer = setTimeout(function () {
-    follow = true;
-    moveCamera(false);
-  }, PLACE_VIEW_MS);
+  followTimer = setTimeout(clearPlace, PLACE_VIEW_MS);
+}
+
+function choosePlace(place) {
+  savePlaceHistory([place, ...placeHistory().filter(o => !samePlace(o, place))].slice(0, PLACE_HISTORY_MAX));
+  closePlaceSearch();
+  stopNav();
+  currentPlace = place;
+  navRetryAt = 0;
+  document.getElementById('place-detail-name').textContent = place.name;
+  renderPlaceInfo();
+  renderPlaceLike();
+  setPlaceDetail(true);
+  setPlacePin(place);
+  focusPlace();
+  closeDetailLater();
+}
+
+function previewRoute() {
+  if (!currentPlace) return;
+  if (!lastPoint) return renderPlaceInfo('Cần có GPS để tính tuyến');
+  closeDetailLater();
+  navPreview = true;
+  if (!navRoute) {
+    navRetryAt = 0;
+    renderPlaceInfo('Đang tính tuyến…');
+    requestRoute(lastPoint.lat, lastPoint.lon, lastPoint.heading);
+    return;
+  }
+  fitRoute(navRoute.points.map(p => [p[1], p[0]]));
+}
+
+function startNav() {
+  if (!currentPlace) return;
+  navActive = true;
+  navPreview = false;
+  setPlaceDetail(false);
+  document.getElementById('map-pane').classList.add('nav');
+  document.getElementById('nav-bar').classList.remove('hidden');
+  document.getElementById('cross-road').classList.add('hidden');
+  document.getElementById('junction').classList.add('hidden');
+  renderNavBar();
+  goToCar();
+  if (lastPoint) {
+    navRetryAt = 0;
+    updateNav(lastPoint.lat, lastPoint.lon, lastPoint.heading);
+  }
+}
+
+// Bỏ mọi trạng thái dẫn đường, không đụng tới bản đồ
+function stopNav() {
+  navRoute = null;
+  navActive = false;
+  navArrived = false;
+  navFailed = false;
+  navPreview = false;
+  navOffFixes = 0;
+  setRouteLine(null);
+  resetGuidance();
+  setPlaceDetail(false);
+  document.getElementById('map-pane').classList.remove('nav');
+  document.getElementById('nav-bar').classList.add('hidden');
 }
 function clearPlace() {
   currentPlace = null;
-  document.getElementById('place-chip').classList.add('hidden');
+  stopNav();
   setPlacePin(null);
-  clearTimeout(followTimer);
-  follow = true;
-  moveCamera(false);
+  goToCar();
 }
 
 // Về ngay vị trí xe, đúng mức phóng khi chạy. Ghim địa điểm vẫn giữ trên bản đồ
 document.getElementById('btn-locate').addEventListener('click', function () {
   if (!map) return;
   if (!carPos) return setStatus('Chưa có vị trí GPS');
-  clearTimeout(followTimer);
-  follow = true;
-  glide = null;
-  map.setZoom(NAV_ZOOM);
-  moveCamera(true);
+  goToCar();
 });
 document.getElementById('btn-search').addEventListener('click', openPlaceSearch);
 // Nút để dành, chưa có chức năng
 document.getElementById('btn-menu').addEventListener('click', () => setStatus('Menu sẽ có chức năng sau'));
 document.getElementById('place-back').addEventListener('click', closePlaceSearch);
-document.getElementById('place-chip-close').addEventListener('click', clearPlace);
+document.getElementById('nav-stop').addEventListener('click', clearPlace);
+document.getElementById('place-detail-close').addEventListener('click', clearPlace);
+document.getElementById('place-detail-back').addEventListener('click', function () {
+  clearPlace();
+  document.getElementById('place-search').classList.remove('hidden');
+});
+document.getElementById('place-route').addEventListener('click', previewRoute);
+document.getElementById('place-start').addEventListener('click', startNav);
+document.getElementById('place-like').addEventListener('click', function () {
+  if (!currentPlace) return;
+  closeDetailLater();
+  const saved = placeSaved();
+  const rest = (saved.favorites || []).filter(o => !samePlace(o, currentPlace));
+  saved.favorites = rest.length === (saved.favorites || []).length ? [currentPlace, ...rest] : rest;
+  savePlaceSaved(saved);
+  renderPlaceLike();
+});
 document.getElementById('place-clear').addEventListener('click', function () {
   savePlaceHistory([]);
   showPlaceHistory();
@@ -2044,7 +2408,7 @@ document.getElementById('place-search-bar').addEventListener('submit', function 
 
 function lookupSpeedLimit(lat, lon, heading) {
   lastPoint = { lat, lon, heading };
-  renderPlaceChip();
+  updateNav(lat, lon, heading);
   updateCameraWarning(lat, lon, heading);
   for (const key of tilesNear(lat, lon)) {
     if (signTiles.has(key) || Date.now() < (signRetryAt.get(key) || 0)) continue;
