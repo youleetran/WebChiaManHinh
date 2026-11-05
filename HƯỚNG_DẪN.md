@@ -30,7 +30,7 @@ Màn hình Mazda Connect **không có trình duyệt chính thức**. Chọn 1 c
 
 ## 4. Giới hạn của phần "cảnh báo tốc độ" (quan trọng)
 - Trang web hiển thị **giới hạn tốc độ (km/h)** của con đường hiện tại, lấy từ dữ liệu **OpenStreetMap**.
-- Khi chạy quá giới hạn **+5 km/h** → bảng tốc độ đổi màu đỏ + nháy "CHẠY QUÁ TỐC ĐỘ" + tiếng bíp.
+- Khi chạy quá giới hạn **+5 km/h** → bảng tốc độ đổi màu đỏ + viền đỏ nháy quanh bản đồ + tiếng bíp.
 - ❌ Cảnh báo camera trên trang chỉ dựa vào danh sách có sẵn trong `speedcams.json`, **không** cập nhật thời gian thực như app Waze. Camera mới hoặc camera di động sẽ không được báo.
 - Trên bản đồ có hai ô chỉ hiện số: biển tròn là giới hạn, ô bên cạnh là tốc độ hiện tại.
 - Đường chưa có dữ liệu `maxspeed` trên OpenStreetMap → hiện số **ước tính** theo loại đường, màu xám, có dấu `~` (ví dụ `~50`). Số ước tính **không kích hoạt cảnh báo** và có thể khác biển báo thật. Bảng tốc độ chỉ hiện `--` khi không xác định được đường đang chạy (ví dụ xe cách đường trên 35 m).
@@ -54,7 +54,9 @@ Dữ liệu © OpenStreetMap, giấy phép ODbL: giữ dòng ghi nguồn ở gó
 - Bản đồ hiện biểu tượng đèn giao thông, biển dừng, biển nhường đường, camera tốc độ và biển giới hạn khi xe tới gần, lấy từ `data/signs` (OpenStreetMap). Biểu tượng đèn chỉ cho biết vị trí, **không** cho biết đèn đang xanh hay đỏ.
 - ⚠️ Dữ liệu biển báo rất ít: cả nước 18 biển nhường đường, 11 biển dừng, 83 biển giới hạn, và phần lớn nơi không có biển nào. Không thấy biểu tượng không có nghĩa là ngoài đường không có biển. Luôn nhìn biển thật.
 - Camera lấy thêm từ `speedcams.json` (đủ 19.609 camera, camera hai chiều đường có thể nằm sát nhau), nằm trong `data/cams` (1.495 file). Camera có giới hạn tốc độ hiện con số màu đỏ. Dữ liệu có thể thiếu hoặc cũ.
-- Khi có camera phía trước trong vòng 500 m, bản đồ nhấp nháy khung vàng có biểu tượng camera và khoảng cách, cả khi khóa iPhone. Cảnh báo chỉ nháy, **không** có tiếng. File không cho biết camera bắn chiều nào nên có thể báo cả camera của chiều ngược lại. Camera ở khúc cua có thể báo muộn hơn vì trang chỉ xét đường thẳng trước mũi xe.
+- Góc trên bên trái hiện đường có tên sắp cắt qua trong vòng 500 m nếu đi tiếp, kèm khoảng cách. Trang không có điểm đến nên đây **không** phải chỉ đường, và mũi tên không bảo bạn rẽ. Hẻm, ngõ và đường không tên không được báo. Dữ liệu không cho biết đường nào đi cầu vượt nên có thể báo cả đường chạy ngầm bên dưới.
+- Tới ngã có từ 3 lối đi trở lên trong vòng 300 m, dưới tên đường hiện khung mũi tên chỉ các hướng đi, tính từ hình dạng đường có tên trong dữ liệu. Mỗi mũi tên là một **lối đi**, **không** phải một làn đường, và không bảo bạn nên đi hướng nào. Dữ liệu có thể thiếu đường cấm rẽ, nên luôn nhìn biển và vạch kẻ thật.
+- Khi có camera phía trước trong vòng 500 m, bản đồ nhấp nháy khung vàng có biểu tượng camera và khoảng cách (không có chữ), cả khi khóa iPhone. Cảnh báo chỉ nháy, **không** có tiếng. File không cho biết camera bắn chiều nào nên có thể báo cả camera của chiều ngược lại. Camera ở khúc cua có thể báo muộn hơn vì trang chỉ xét đường thẳng trước mũi xe.
 - Khi có `speedcams.json` mới: `python tools/build_cams.py speedcams.json data/cams`
 - Bản đồ cũng hiện cây xăng từ OpenStreetMap, kèm tên hãng nếu có. Dữ liệu có thể thiếu hoặc cũ, ví dụ cây đã đóng cửa.
 - Cập nhật cùng dữ liệu đường: `python tools/build_signs.py vietnam-latest.osm.pbf data/signs`
