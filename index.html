@@ -69,9 +69,6 @@
     background: #fff; color: #222; border: none; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.45); cursor: pointer;
   }
   .side-btn svg { width: 20px; height: 20px; }
-  /* Nút về xe nằm trên cùng cột nút bên phải, rộng bằng cột. Không có bản đồ thì không cần nút này */
-  #btn-locate { width: 31px; height: 31px; border-radius: 8px; }
-  #map-pane > #btn-locate { display: none; }
 
   /* Màn hình tìm địa điểm, phủ phần bản đồ. Ô nhập phải từ 26px, nhỏ hơn thì iPhone tự phóng to trên xe */
   #place-search {
@@ -137,7 +134,9 @@
   #map-pane.nav #cross-road > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1; }
   #map-pane.nav #cross-road-dist { flex: none; font-size: 22px; }
   #map-pane.nav #cross-road-name { font-size: 16px; max-width: none; min-width: 0; }
-  #map-pane.nav #map-side { display: none; }
+  /* Đang dẫn đường chỉ giữ nút về xe, đặt trên thanh giờ tới */
+  #map-pane.nav #map-side { bottom: 60px; }
+  #map-pane.nav #btn-search, #map-pane.nav #btn-menu { display: none; }
   #map-pane.nav #gps-status { bottom: 58px; }
   #nav-bar {
     position: absolute; z-index: 1000; left: 10px; right: 52px; bottom: 16px; height: 36px; box-sizing: border-box;
@@ -425,11 +424,10 @@
       <div id="place-list"></div>
     </div>
 
-    <button class="side-btn maplibregl-ctrl" id="btn-locate" title="Về vị trí xe">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#1e88ff" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2.6" fill="#1e88ff" stroke="none"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
-    </button>
-
     <div id="map-side">
+      <button class="side-btn" id="btn-locate" title="Về vị trí xe">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#1e88ff" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2.6" fill="#1e88ff" stroke="none"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      </button>
       <button class="side-btn" id="btn-search" title="Tìm địa điểm">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><path d="M16 16l5 5"/></svg>
       </button>
@@ -732,7 +730,6 @@ try {
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
   // Thêm sau nên nằm ngay trên nút + −, luôn thẳng cột dù dòng ghi nguồn có xuống hàng
   map.addControl({ onAdd: () => document.getElementById('map-tools'), onRemove: () => {} }, 'bottom-right');
-  map.addControl({ onAdd: () => document.getElementById('btn-locate'), onRemove: () => {} }, 'bottom-right');
 } catch (e) {
   map = null;
   document.getElementById('map').innerHTML =
