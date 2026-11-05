@@ -61,6 +61,42 @@
     color: var(--text); font-size: 15px; line-height: 29px; text-align: center; cursor: pointer;
   }
   #map .maplibregl-ctrl-group button#btn-sound.active { background: var(--accent-green); color: #fff; }
+  #map .maplibregl-ctrl-group button#btn-search, #map-pane > #map-tools #btn-search { background: #fff; color: #111; }
+  #btn-search svg { width: 17px; height: 17px; vertical-align: middle; }
+
+  /* Màn hình tìm địa điểm, phủ phần bản đồ. Ô nhập phải từ 26px, nhỏ hơn thì iPhone tự phóng to trên xe */
+  #place-search {
+    position: absolute; z-index: 1100; inset: 0; display: flex; flex-direction: column;
+    background: var(--panel); color: var(--text);
+  }
+  #place-search.hidden { display: none; }
+  #place-search-bar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; flex: none; }
+  #place-back { flex: none; width: 40px; height: 44px; background: none; border: none; color: var(--text); font-size: 26px; cursor: pointer; }
+  #place-input {
+    flex: 1; min-width: 0; box-sizing: border-box; height: 44px; padding: 0 12px;
+    background: var(--bg); color: var(--text); border: 1.5px solid #2fe0e6; border-radius: 10px; outline: none; font-size: 26px;
+  }
+  #place-list-head { display: flex; justify-content: space-between; align-items: center; padding: 2px 12px; flex: none; font-weight: 700; font-size: 15px; }
+  #place-list-head.hidden { display: none; }
+  #place-clear { background: none; border: none; color: var(--muted); font-size: 14px; padding: 6px 0; cursor: pointer; }
+  #place-list { flex: 1; min-height: 0; overflow-y: auto; }
+  .place-item {
+    display: block; width: 100%; padding: 8px 12px; text-align: left; cursor: pointer;
+    background: none; border: none; border-bottom: 1px solid var(--border); color: var(--text);
+  }
+  .place-item b { display: block; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .place-item span { display: block; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #place-message { padding: 20px 12px; text-align: center; color: var(--muted); font-size: 15px; }
+
+  /* Điểm đang xem, nằm ngay trên tên đường */
+  #place-chip {
+    position: absolute; z-index: 1000; left: 50%; bottom: 56px; transform: translateX(-50%); max-width: 70%;
+    display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 12px;
+    background: #0a0a0c; color: #fff; border-radius: 16px; font-size: 14px; font-weight: 600;
+  }
+  #place-chip.hidden { display: none; }
+  #place-chip-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #place-chip-close { flex: none; width: 28px; height: 28px; background: none; border: none; color: #fff; font-size: 15px; cursor: pointer; }
 
   /* Tên đường đang chạy, nằm giữa phía dưới như app dẫn đường */
   #gps-status {
@@ -306,7 +342,27 @@
       <span id="cam-warning-text"></span>
     </div>
 
+    <div id="place-chip" class="hidden">
+      <span id="place-chip-text"></span>
+      <button id="place-chip-close" title="Bỏ điểm này và quay về xe">✕</button>
+    </div>
+
+    <div id="place-search" class="hidden">
+      <form id="place-search-bar">
+        <button type="button" id="place-back" title="Đóng">‹</button>
+        <input id="place-input" type="search" placeholder="Tìm kiếm" autocomplete="off" enterkeyhint="search">
+      </form>
+      <div id="place-list-head" class="hidden">
+        <span>Lịch sử tìm kiếm</span>
+        <button type="button" id="place-clear">Xoá lịch sử</button>
+      </div>
+      <div id="place-list"></div>
+    </div>
+
     <div id="map-tools" class="maplibregl-ctrl maplibregl-ctrl-group">
+      <button class="map-btn" id="btn-search" title="Tìm địa điểm">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><path d="M16 16l5 5"/></svg>
+      </button>
       <button class="map-btn" id="btn-sound" title="Bật / tắt tiếng cảnh báo">🔔</button>
       <button class="map-btn" id="btn-expand-map" title="Phóng to bản đồ">⛶</button>
     </div>
@@ -372,6 +428,13 @@ const INSTANCE_LIST_URL = 'https://api.invidious.io/instances.json';
 const ROAD_DATA_URL = 'data/roads/';
 const SIGN_DATA_URL = 'data/signs/';
 const CAM_DATA_URL = 'data/cams/';
+const PLACE_SEARCH_URL = 'https://photon.komoot.io/api/?limit=8&bbox=102,8,110,24';  // chỉ tìm trong Việt Nam
+const PLACE_SEARCH_DELAY_MS = 500;  // ngừng gõ chừng này mới tìm, đỡ gửi nhiều yêu cầu
+const PLACE_VIEW_MS = 30000;        // xem điểm tìm được chừng này thì bản đồ tự quay về xe (lúc khóa máy không bấm được)
+const PLACE_ZOOM = 15;
+const PLACE_SAME_M = 100;           // hai kết quả cùng tên gần nhau hơn chừng này chỉ giữ một
+const PLACE_HISTORY_KEY = 'placeHistory';
+const PLACE_HISTORY_MAX = 8;
 const CAM_WARN_M = 500;        // camera phía trước trong khoảng này thì nhấp nháy cảnh báo
 const CAM_WARN_SIDE_M = 60;    // camera lệch sang ngang hơn chừng này là ở đường khác, không cảnh báo
 const CROSS_ROAD_M = 500;      // báo đường sắp cắt qua trong khoảng này
@@ -459,7 +522,8 @@ const NAV_MAP_STYLE = {
   sources: {
     osm: { type: 'vector', url: MAP_TILES_URL },
     'current-road': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
-    signs: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
+    signs: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+    'search-place': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
   },
   layers: [
     { id: 'background', type: 'background', paint: { 'background-color': '#242f3e' } },
@@ -518,6 +582,23 @@ const NAV_MAP_STYLE = {
         'text-optional': true
       },
       paint: { 'text-color': '#8ff0b4', 'text-halo-color': '#17202c', 'text-halo-width': 1.5 } },
+    // Vẽ trong bản đồ chứ không dùng Marker, để lớp video lúc khóa máy cũng thấy
+    { id: 'search-place', type: 'symbol', source: 'search-place',
+      layout: {
+        'icon-image': 'sign-place',
+        'icon-anchor': 'bottom',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-pitch-alignment': 'viewport',
+        'icon-rotation-alignment': 'viewport',
+        'text-field': ['get', 'name'],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 14,
+        'text-anchor': 'top',
+        'text-offset': [0, 0.3],
+        'text-optional': true
+      },
+      paint: { 'text-color': '#ffffff', 'text-halo-color': '#17202c', 'text-halo-width': 2 } },
     { id: 'place-name', type: 'symbol', source: 'osm', 'source-layer': 'place', maxzoom: 14,
       layout: { 'text-field': ['coalesce', ['get', 'name'], ''], 'text-font': ['Noto Sans Regular'], 'text-size': 14 },
       paint: { 'text-color': '#d5b98a', 'text-halo-color': '#17202c', 'text-halo-width': 1.5 } }
@@ -1509,6 +1590,21 @@ function drawSignIcon(ctx, id) {
     ctx.quadraticCurveTo(39, 45, 39, 41);
     ctx.lineTo(39, 33);
     ctx.stroke();
+  } else if (id === 'sign-place') {
+    // Ghim đỏ, mũi ghim ở sát đáy hình
+    ctx.fillStyle = '#e11d2e';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(c, 24, 19, Math.PI * 0.85, Math.PI * 0.15);
+    ctx.lineTo(c, S - 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(c, 24, 7, 0, Math.PI * 2);
+    ctx.fill();
   } else if (id.indexOf('sign-camera') === 0) {
     // Camera có giới hạn tốc độ: thay ống kính bằng con số, ví dụ sign-camera-60
     const limit = id.split('-')[2];
@@ -1592,8 +1688,172 @@ function updateCameraWarning(lat, lon, heading) {
   }
 }
 
+/* ---------- Tìm địa điểm ----------
+   Gửi chữ bạn gõ tới Photon (dữ liệu OpenStreetMap). Để ưu tiên nơi gần xe, chỉ gửi vị trí làm tròn
+   tới 0,1 độ (khoảng 11 km), không gửi vị trí chính xác. Chỉ đưa tới xem điểm, chưa có dẫn đường. */
+const placeInput = document.getElementById('place-input');
+const placeList = document.getElementById('place-list');
+let placeTimer = null;
+let placeToken = 0;       // bỏ qua kết quả của lần gõ cũ
+let currentPlace = null;  // điểm đang ghim trên bản đồ
+
+function placeHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(PLACE_HISTORY_KEY)) || [];
+  } catch (e) {
+    return [];
+  }
+}
+function savePlaceHistory(list) {
+  try {
+    localStorage.setItem(PLACE_HISTORY_KEY, JSON.stringify(list));
+  } catch (e) {}
+}
+
+function showPlaceMessage(text) {
+  document.getElementById('place-list-head').classList.add('hidden');
+  placeList.innerHTML = '';
+  const el = document.createElement('div');
+  el.id = 'place-message';
+  el.textContent = text;
+  placeList.appendChild(el);
+}
+function showPlaces(places) {
+  placeList.innerHTML = '';
+  for (const place of places) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'place-item';
+    const title = document.createElement('b');
+    title.textContent = place.name;
+    const detail = document.createElement('span');
+    detail.textContent = place.detail;
+    item.append(title, detail);
+    item.addEventListener('click', () => choosePlace(place));
+    placeList.appendChild(item);
+  }
+}
+function showPlaceHistory() {
+  const history = placeHistory();
+  if (!history.length) return showPlaceMessage('Gõ tên đường hoặc địa điểm để tìm');
+  document.getElementById('place-list-head').classList.remove('hidden');
+  showPlaces(history);
+}
+
+function toPlace(feature) {
+  const p = feature.properties;
+  const road = [p.housenumber, p.street].filter(Boolean).join(' ');
+  const name = p.name || road;
+  if (!name) return null;
+  const parts = [p.name ? road : '', p.district, p.city, p.state].filter(Boolean);
+  const [lon, lat] = feature.geometry.coordinates;
+  return { name, detail: parts.filter((part, i) => parts.indexOf(part) === i).join(', '), lat, lon };
+}
+
+async function searchPlaces() {
+  const q = placeInput.value.trim();
+  const token = ++placeToken;
+  if (!q) return showPlaceHistory();
+  document.getElementById('place-list-head').classList.add('hidden');
+  let url = PLACE_SEARCH_URL + '&q=' + encodeURIComponent(q);
+  if (lastPoint) url += '&lat=' + lastPoint.lat.toFixed(1) + '&lon=' + lastPoint.lon.toFixed(1);
+  try {
+    const r = await fetchWithTimeout(url, 10000);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if (token !== placeToken) return;
+    const places = [];
+    for (const place of data.features.map(toPlace)) {
+      if (!place) continue;
+      if (places.some(o => o.name === place.name && distanceM(o.lat, o.lon, place.lat, place.lon) < PLACE_SAME_M)) continue;
+      places.push(place);
+    }
+    if (places.length) showPlaces(places);
+    else showPlaceMessage('Không tìm thấy địa điểm này');
+  } catch (e) {
+    if (token === placeToken) showPlaceMessage('Không tìm được, hãy kiểm tra mạng rồi thử lại');
+  }
+}
+
+function openPlaceSearch() {
+  document.getElementById('place-search').classList.remove('hidden');
+  placeInput.value = '';
+  placeToken++;
+  showPlaceHistory();
+  placeInput.focus();
+}
+function closePlaceSearch() {
+  clearTimeout(placeTimer);
+  placeToken++;
+  placeInput.blur();
+  document.getElementById('place-search').classList.add('hidden');
+}
+
+function renderPlaceChip() {
+  if (!currentPlace) return;
+  const here = lastPoint ? distanceM(lastPoint.lat, lastPoint.lon, currentPlace.lat, currentPlace.lon) : null;
+  const dist = here == null ? '' : (here < 1000 ? Math.round(here / 10) * 10 + ' m' : (here / 1000).toFixed(1).replace('.', ',') + ' km') + ' · ';
+  document.getElementById('place-chip-text').textContent = dist + currentPlace.name;
+}
+
+function setPlacePin(place) {
+  const source = map && map.getSource('search-place');
+  if (!source) return;
+  source.setData({ type: 'FeatureCollection', features: place ? [{
+    type: 'Feature',
+    properties: { name: place.name },
+    geometry: { type: 'Point', coordinates: [place.lon, place.lat] }
+  }] : [] });
+}
+
+function choosePlace(place) {
+  savePlaceHistory([place, ...placeHistory().filter(o => o.name !== place.name || o.lat !== place.lat || o.lon !== place.lon)].slice(0, PLACE_HISTORY_MAX));
+  closePlaceSearch();
+  currentPlace = place;
+  renderPlaceChip();
+  document.getElementById('place-chip').classList.remove('hidden');
+  setPlacePin(place);
+  if (!map) return;
+  follow = false;
+  glide = null;
+  map.easeTo({ center: [place.lon, place.lat], zoom: PLACE_ZOOM, pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 600 });
+  // Xem một lúc rồi tự về xe, ghim vẫn còn trên bản đồ
+  clearTimeout(followTimer);
+  followTimer = setTimeout(function () {
+    follow = true;
+    moveCamera(false);
+  }, PLACE_VIEW_MS);
+}
+function clearPlace() {
+  currentPlace = null;
+  document.getElementById('place-chip').classList.add('hidden');
+  setPlacePin(null);
+  clearTimeout(followTimer);
+  follow = true;
+  moveCamera(false);
+}
+
+document.getElementById('btn-search').addEventListener('click', openPlaceSearch);
+document.getElementById('place-back').addEventListener('click', closePlaceSearch);
+document.getElementById('place-chip-close').addEventListener('click', clearPlace);
+document.getElementById('place-clear').addEventListener('click', function () {
+  savePlaceHistory([]);
+  showPlaceHistory();
+  placeInput.focus();
+});
+placeInput.addEventListener('input', function () {
+  clearTimeout(placeTimer);
+  placeTimer = setTimeout(searchPlaces, PLACE_SEARCH_DELAY_MS);
+});
+document.getElementById('place-search-bar').addEventListener('submit', function (e) {
+  e.preventDefault();
+  clearTimeout(placeTimer);
+  searchPlaces();
+});
+
 function lookupSpeedLimit(lat, lon, heading) {
   lastPoint = { lat, lon, heading };
+  renderPlaceChip();
   updateCameraWarning(lat, lon, heading);
   for (const key of tilesNear(lat, lon)) {
     if (signTiles.has(key) || Date.now() < (signRetryAt.get(key) || 0)) continue;
