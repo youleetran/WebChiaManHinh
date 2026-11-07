@@ -4194,6 +4194,40 @@ const DEFAULT_VIDEO = { videoId: 'kziedyAHYPE', title: 'Nhạc Chill Nhẹ Nhàn
 const AUTOPLAY_CHECK_MS = 2500;   // chưa phát được sau chừng này thì phát không tiếng, chạm vào trang là có tiếng
 let userPausedVideo = false;      // bạn tự bấm dừng thì không tự phát lại
 let autoMuted = false;            // trang tự tắt tiếng để được tự phát
+
+/* ---------- Nghe tiếp khi tắt màn hình ----------
+   Tắt màn hình iPhone thì trình phát (YouTube hoặc video Invidious) bị dừng dù bạn không bấm.
+   Dừng lúc trang đang ẩn (hoặc vừa ẩn) thì coi là máy tự dừng, thử phát lại vài lần, giãn dần.
+   Bạn tự bấm dừng (nút, màn hình khóa, vô lăng) thì không phát lại. */
+const RESUME_TRIES = 8;
+const RESUME_HIDDEN_MS = 3000;   // dừng trong chừng này sau khi trang ẩn vẫn tính là máy tự dừng
+let pageHiddenAt = 0, resumeTimer = null;
+function pageHidden() { return document.visibilityState === 'hidden'; }
+function systemPaused() { return pageHidden() || Date.now() - pageHiddenAt < RESUME_HIDDEN_MS; }
+function keepPlaying() {
+  if (userPausedVideo || !currentVideoId) return;
+  clearTimeout(resumeTimer);
+  let tries = 0;
+  const tryPlay = () => {
+    if (userPausedVideo) return;
+    let paused = true;
+    try { paused = media.paused; } catch (e) {}
+    if (!paused) return;
+    try { media.play(); } catch (e) {}
+    if (++tries < RESUME_TRIES) resumeTimer = setTimeout(tryPlay, 400 * tries);
+  };
+  resumeTimer = setTimeout(tryPlay, 300);
+}
+document.addEventListener('visibilitychange', () => {
+  if (pageHidden()) pageHiddenAt = Date.now();
+  keepPlaying();   // ẩn: phòng khi bị dừng; hiện lại: phát tiếp nếu đang bị dừng
+});
+window.addEventListener('pagehide', () => { pageHiddenAt = Date.now(); });
+// Canh định kỳ lúc màn hình tắt: lỡ bị dừng mà không có sự kiện nào báo
+setInterval(() => {
+  if (!pageHidden() || userPausedVideo || !currentVideoId) return;
+  try { if (media.paused) media.play(); } catch (e) {}
+}, 2000);
 let ytPlayer = null, ytState = -1, ytReady = null;
 
 function loadYouTubeApi() {
@@ -4288,6 +4322,12 @@ async function playYouTube(item, token) {
             if (e.data === 2) navigator.mediaSession.playbackState = 'paused';
           }
           if (e.data === 1) { autoSkips = 0; clearPlayError(); }
+          // 2 = dừng, -1/5 = chưa chạy (bài mới nạp lúc màn hình tắt)
+          if (engine !== 'youtube') return;
+          if (e.data === 1) userPausedVideo = false;
+          if ((e.data === 2 || e.data === -1 || e.data === 5) && systemPaused()) keepPlaying();
+          // Dừng lúc màn hình đang sáng là bạn bấm dừng ngay trong khung YouTube
+          else if (e.data === 2) userPausedVideo = true;
           if (e.data === 0 && engine === 'youtube') { saveState(); changeTrack(1); }
         },
         onError: () => {
@@ -4504,6 +4544,12 @@ videoEl.addEventListener('timeupdate', function () {
   }
 });
 videoEl.addEventListener('pause', saveState);
+videoEl.addEventListener('pause', () => {
+  if (engine !== 'invidious' || videoEl.ended || !currentVideoId) return;
+  if (systemPaused()) keepPlaying();
+  else userPausedVideo = true;   // bấm dừng trên trình phát lúc màn hình sáng
+});
+videoEl.addEventListener('play', () => { if (engine === 'invidious') userPausedVideo = false; });
 
 document.getElementById('btn-prev').addEventListener('click', () => changeTrack(-1));
 document.getElementById('btn-next').addEventListener('click', () => changeTrack(1));
