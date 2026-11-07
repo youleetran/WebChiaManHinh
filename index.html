@@ -542,6 +542,11 @@
             <span class="settings-text"><b>Trình phát video</b><span id="player-summary"></span></span>
             <span class="settings-arrow">›</span>
           </button>
+          <button type="button" class="settings-row" data-page="settings-log">
+            <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4"/></svg></span>
+            <span class="settings-text"><b>Nhật ký phát nhạc</b><span>Xem nhạc bị dừng lúc nào, vì sao</span></span>
+            <span class="settings-arrow">›</span>
+          </button>
           <button type="button" class="settings-row" data-page="settings-theme">
             <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg></span>
             <span class="settings-text"><b>Màu bản đồ</b><span id="theme-summary"></span></span>
@@ -571,6 +576,11 @@
       <div class="settings-page hidden" id="settings-player">
         <div id="player-list"></div>
         <div class="settings-note">Khung YouTube giống duoscreen: ổn định, nhưng quảng cáo có hay không là do YouTube (trang không chặn được). Invidious không có quảng cáo nhưng máy chủ hay bị chặn; khi lỗi thì trang tự chuyển sang khung YouTube để không mất nhạc. Đổi xong áp dụng từ bài kế tiếp.</div>
+      </div>
+      <div class="settings-page hidden" id="settings-log">
+        <div class="settings-note" style="margin: 0 4px 8px">Bật nhạc, tắt màn hình iPhone chừng 30 giây, mở lại rồi vào đây chụp màn hình gửi lại. Dòng mới nhất ở trên.</div>
+        <button type="button" class="settings-row" id="play-log-clear" style="min-height: 40px">Xóa nhật ký</button>
+        <pre id="play-log" style="white-space: pre-wrap; font-size: 13px; line-height: 1.35; margin: 8px 4px; color: var(--text)"></pre>
       </div>
       <div class="settings-page hidden" id="settings-theme">
         <div id="theme-list"></div>
@@ -3780,7 +3790,16 @@ function renderVoiceList() {
     : 'Tiếng đang tắt nên khi chạy trang không đọc và không kêu bíp. Bấm một giọng vẫn nghe thử được.';
 }
 // Bảng Cài đặt: trang chính là danh sách mục, bấm một mục thì mở trang của mục đó
-const SETTINGS_TITLES = { 'settings-main': 'Cài đặt', 'settings-speed': 'Tốc độ', 'settings-voice': 'Giọng nói', 'settings-alerts': 'Tùy chỉnh cảnh báo', 'settings-map': 'Biển báo trên bản đồ', 'settings-theme': 'Màu bản đồ', 'settings-player': 'Trình phát video' };
+const SETTINGS_TITLES = { 'settings-main': 'Cài đặt', 'settings-speed': 'Tốc độ', 'settings-voice': 'Giọng nói', 'settings-alerts': 'Tùy chỉnh cảnh báo', 'settings-map': 'Biển báo trên bản đồ', 'settings-theme': 'Màu bản đồ', 'settings-player': 'Trình phát video', 'settings-log': 'Nhật ký phát nhạc' };
+function renderPlayLog() {
+  document.getElementById('play-log').textContent = playLog.slice().reverse().join('\n') || '(chưa có)';
+}
+document.getElementById('play-log-clear').addEventListener('click', () => {
+  playLog = [];
+  try { localStorage.removeItem(PLAY_LOG_KEY); } catch (e) {}
+  logPlay('--- xóa nhật ký ---');
+  renderPlayLog();
+});
 function renderPlayerList() {
   const list = document.getElementById('player-list');
   list.innerHTML = '';
@@ -3904,6 +3923,7 @@ function offsetLabel(value) {
 }
 function renderSettings() {
   renderVoiceList();
+  renderPlayLog();
   renderPlayerList();
   document.getElementById('player-summary').textContent = VIDEO_SOURCES.find(o => o.id === videoSource).label;
   renderThemeList();
@@ -4225,6 +4245,42 @@ let autoMuted = false;            // trang tự tắt tiếng để được t�
    Tắt màn hình iPhone thì trình phát (YouTube hoặc video Invidious) bị dừng dù bạn không bấm.
    Dừng lúc trang đang ẩn (hoặc vừa ẩn) thì coi là máy tự dừng, thử phát lại vài lần, giãn dần.
    Bạn tự bấm dừng (nút, màn hình khóa, vô lăng) thì không phát lại. */
+/* ---------- Nhật ký phát nhạc ----------
+   Ghi lại chuyện xảy ra với nhạc (trang ẩn/hiện, YouTube dừng/phát, đoạn im lặng, nút màn hình khóa...)
+   để biết iPhone làm gì khi tắt màn hình. Xem trong Cài đặt → Nhật ký phát nhạc. Lưu 150 dòng gần nhất. */
+const PLAY_LOG_KEY = 'playLog';
+const PLAY_LOG_MAX = 150;
+let playLog = [];
+try { playLog = JSON.parse(localStorage.getItem(PLAY_LOG_KEY)) || []; } catch (e) {}
+let playLogSaveTimer = null;
+function logPlay(text) {
+  const d = new Date();
+  const t = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' +
+    String(d.getSeconds()).padStart(2, '0');
+  playLog.push(t + ' ' + text);
+  if (playLog.length > PLAY_LOG_MAX) playLog.splice(0, playLog.length - PLAY_LOG_MAX);
+  // Lưu ngay: lúc tắt màn hình trang có thể bị dừng bất cứ lúc nào
+  clearTimeout(playLogSaveTimer);
+  playLogSaveTimer = setTimeout(() => {
+    try { localStorage.setItem(PLAY_LOG_KEY, JSON.stringify(playLog)); } catch (e) {}
+  }, 50);
+}
+logPlay('--- mở trang ---');
+document.addEventListener('visibilitychange', () => logPlay('trang ' + (document.visibilityState === 'hidden' ? 'ẨN' : 'HIỆN')));
+window.addEventListener('pagehide', () => logPlay('pagehide'));
+window.addEventListener('pageshow', () => logPlay('pageshow'));
+window.addEventListener('blur', () => logPlay('blur (mất focus' + (document.activeElement && document.activeElement.id === 'yt-host' ? ', chạm khung YouTube' : '') + ')'));
+window.addEventListener('focus', () => logPlay('focus'));
+document.addEventListener('freeze', () => logPlay('freeze (trang bị đóng băng)'));
+document.addEventListener('resume', () => logPlay('resume (hết đóng băng)'));
+// Đồng hồ: trang bị dừng bao lâu (nếu có) thì thấy khoảng trống giữa hai nhịp
+let lastTickAt = Date.now();
+setInterval(() => {
+  const gap = Date.now() - lastTickAt;
+  if (gap > 5000) logPlay('trang ngừng chạy ' + Math.round(gap / 1000) + ' giây');
+  lastTickAt = Date.now();
+}, 1000);
+
 // Giữ trang "đang phát nhạc" như duoscreen: một thẻ <audio> phát đoạn im lặng 5 giây lặp mãi,
 // và báo iPhone đây là trang phát nhạc (audioSession = playback). Nhờ vậy khi tắt màn hình
 // iPhone không dừng trang, khung YouTube vẫn chạy và màn hình khóa vẫn có nút điều khiển.
@@ -4254,8 +4310,10 @@ function keepAlive(on) {
       keepAliveEl.setAttribute('playsinline', '');
       keepAliveEl.setAttribute('x-webkit-airplay', 'deny');
       document.body.appendChild(keepAliveEl);
+      keepAliveEl.addEventListener('playing', () => logPlay('im lặng: chạy'));
+      keepAliveEl.addEventListener('pause', () => logPlay('im lặng: bị dừng'));
     }
-    if (keepAliveEl.paused) keepAliveEl.play().catch(function () {});
+    if (keepAliveEl.paused) keepAliveEl.play().catch(err => logPlay('im lặng: không chạy được (' + err.name + ')'));
   } else if (keepAliveEl && !keepAliveEl.paused) {
     keepAliveEl.pause();
   }
@@ -4297,6 +4355,7 @@ function keepPlaying() {
     let paused = true;
     try { paused = media.paused; } catch (e) {}
     if (!paused) return;
+    logPlay('thử phát lại lần ' + (tries + 1));
     try { media.play(); } catch (e) {}
     if (++tries < RESUME_TRIES) resumeTimer = setTimeout(tryPlay, 400 * tries);
   };
@@ -4310,7 +4369,7 @@ window.addEventListener('pagehide', () => { pageHiddenAt = Date.now(); });
 // Canh định kỳ: lỡ bị dừng mà không có sự kiện nào báo (khóa iPhone, Carvia chạy nền)
 setInterval(() => {
   if (userPausedVideo || !currentVideoId || autoMuted && !ytEverPlayed) return;
-  try { if (media.paused) media.play(); } catch (e) {}
+  try { if (media.paused) { logPlay('canh định kỳ: đang dừng, phát lại'); media.play(); } } catch (e) {}
 }, 2000);
 let ytPlayer = null, ytState = -1, ytReady = null;
 let ytEverPlayed = false;   // khung YouTube đã phát được lần nào chưa (chưa thì iPhone còn chặn tự phát)
@@ -4401,6 +4460,8 @@ async function playYouTube(item, token) {
         },
         onStateChange: e => {
           ytState = e.data;
+          logPlay('YouTube: ' + ({ '-1': 'chưa chạy', 0: 'hết bài', 1: 'đang phát', 2: 'DỪNG', 3: 'đang tải', 5: 'sẵn sàng' }[e.data] || e.data) +
+            (e.data === 2 ? (userPausedVideo ? ' (bạn bấm)' : touchedPlayerRecently() ? ' (chạm khung)' : ' (tự dừng)') : ''));
           renderPlayButtons();
           if ('mediaSession' in navigator) {
             if (e.data === 1) navigator.mediaSession.playbackState = 'playing';
@@ -4585,9 +4646,9 @@ setInterval(() => {
 const mediaActions = {
     nexttrack: () => changeTrack(1),
     previoustrack: () => changeTrack(-1),
-    play: () => { userPausedVideo = false; keepAlive(true); media.play(); },
-    pause: () => { userPausedVideo = true; keepAlive(false); media.pause(); },
-    stop: () => { userPausedVideo = true; keepAlive(false); media.pause(); },
+    play: () => { logPlay('màn hình khóa: PHÁT'); userPausedVideo = false; keepAlive(true); media.play(); },
+    pause: () => { logPlay('màn hình khóa: DỪNG'); userPausedVideo = true; keepAlive(false); media.pause(); },
+    stop: () => { logPlay('màn hình khóa: STOP'); userPausedVideo = true; keepAlive(false); media.pause(); },
     // Để trống thì iPhone hiện nút chuyển bài thay vì nút tua
     seekbackward: null,
     seekforward: null
@@ -4650,11 +4711,14 @@ videoEl.addEventListener('pause', () => {
   onPlayerPaused();
 });
 videoEl.addEventListener('play', () => { if (engine === 'invidious') { userPausedVideo = false; keepAlive(true); } });
+videoEl.addEventListener('playing', () => { if (engine === 'invidious') logPlay('Invidious: đang phát'); });
+videoEl.addEventListener('pause', () => { if (engine === 'invidious' && currentVideoId) logPlay('Invidious: DỪNG'); });
 
 document.getElementById('btn-prev').addEventListener('click', () => changeTrack(-1));
 document.getElementById('btn-next').addEventListener('click', () => changeTrack(1));
 document.getElementById('btn-playpause').addEventListener('click', () => {
   userPausedVideo = !media.paused;
+  logPlay('nút trang: ' + (userPausedVideo ? 'DỪNG' : 'PHÁT'));
   keepAlive(!userPausedVideo);
   if (media.paused) media.play();
   else media.pause();
