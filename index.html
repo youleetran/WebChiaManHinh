@@ -352,6 +352,8 @@
   #video, #yt-host { display: block; width: 100%; border: 0; border-radius: 10px; background: #000; }
   /* Khung YouTube (như duoscreen) và trình phát Invidious dùng chung chỗ, chỉ hiện một cái */
   #now-playing.yt #video, #now-playing:not(.yt) #yt-host { display: none; }
+  /* Khung YouTube đã tự hiện tên bài ở trên, không hiện thêm dòng tên của trang cho khỏi đè */
+  #now-playing.yt .np-card { display: none; }
   #yt-host { aspect-ratio: 16 / 9; }
 
   /* Đang xem video: video chiếm hết chỗ, danh sách ẩn */
