@@ -3608,6 +3608,7 @@ function loadClip(name) {
 const VOICE_LEAD_S = 0.08;   // chờ loa sẵn sàng rồi mới phát, để không mất hay giật tiếng đầu câu
 const VOICE_FADE_S = 0.01;   // vào ra tiếng thật nhẹ để không có tiếng tách ở đầu và cuối câu
 async function playClip(buffer) {
+  voiceBusyUntil = Math.max(voiceBusyUntil, Date.now() + (VOICE_LEAD_S + buffer.duration) * 1000 + VOICE_BUSY_EXTRA_MS);
   try {
     keepAudio(buffer.duration * 1000 + 1500);
     await ensureAudio();   // phát lúc context còn đang mở lại thì đầu câu bị vấp
@@ -3639,6 +3640,10 @@ function say(names, force) {
   const clips = [].concat(names).map(loadClip);
   voiceWaiting++;
   voiceChain = voiceChain.then(async () => {
+    // Nhớ nhạc có đang phát không, để đọc xong phát tiếp nếu iPhone lỡ dừng nhạc
+    if (Date.now() >= voiceBusyUntil) {
+      try { voiceWasPlaying = !media.paused; } catch (e) { voiceWasPlaying = false; }
+    }
     for (const clip of clips) {
       const buffer = await clip;
       if (!buffer) continue;
@@ -3647,7 +3652,14 @@ function say(names, force) {
     }
   }).catch(() => {}).then(() => {
     voiceWaiting--;
-    if (voiceWaiting === 0) muteVideoForVoice(false);   // đọc hết các câu đang chờ mới bật lại tiếng
+    if (voiceWaiting === 0) {
+      muteVideoForVoice(false);   // đọc hết các câu đang chờ mới bật lại tiếng
+      // Trên iPhone, bật bộ phát giọng đọc có thể làm nhạc dừng hẳn: phát lại
+      if (voiceWasPlaying && !userPausedVideo) {
+        keepAlive(true);
+        keepPlaying();
+      }
+    }
   });
   return true;
 }
@@ -3655,6 +3667,10 @@ function say(names, force) {
 // Tắt tiếng video lúc đang đọc, đọc xong bật lại. Chỉ bật lại khi chính chỗ này đã tắt,
 // để video người dùng tự tắt tiếng thì vẫn giữ tắt.
 let voiceMutedVideo = false;
+// Lúc đang đọc (và vài giây sau, khi đóng bộ phát) nhạc bị dừng là do iPhone, không phải bạn bấm
+let voiceBusyUntil = 0;
+let voiceWasPlaying = false;
+const VOICE_BUSY_EXTRA_MS = 3500;
 function muteVideoForVoice(mute) {
   try {
     if (mute) {
@@ -4243,7 +4259,9 @@ const RESUME_TRIES = 8;
 const RESUME_HIDDEN_MS = 3000;   // dừng trong chừng này sau khi trang ẩn vẫn tính là máy tự dừng
 let pageHiddenAt = 0, resumeTimer = null;
 function pageHidden() { return document.visibilityState === 'hidden'; }
-function systemPaused() { return pageHidden() || Date.now() - pageHiddenAt < RESUME_HIDDEN_MS; }
+function systemPaused() {
+  return pageHidden() || Date.now() - pageHiddenAt < RESUME_HIDDEN_MS || Date.now() < voiceBusyUntil;
+}
 function keepPlaying() {
   if (userPausedVideo || !currentVideoId) return;
   clearTimeout(resumeTimer);
