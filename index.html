@@ -402,12 +402,23 @@
   #result-tabs button.active { color: var(--text); border-color: var(--accent); }
   #result-tabs .scroll-btn { flex: 0 0 44px; color: var(--text); }
 
-  .drive-buttons { display: flex; flex: 0 0 auto; gap: 8px; }
+  /* Thanh nút phát: lùi, phát (xanh khi dừng, đỏ khi đang phát), tới, phát lại, tắt tiếng */
+  .drive-buttons { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
   .drive-buttons button {
-    width: 48px; height: 40px; font-size: 20px; cursor: pointer;
-    background: var(--bg); color: var(--text);
-    border: 1px solid var(--border); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;
+    width: 44px; height: 44px; border-radius: 16px;
+    background: rgba(38,38,38,0.9); color: #ebebeb; border: 1px solid rgba(61,61,61,0.8);
   }
+  .drive-buttons button svg { width: 22px; height: 22px; }
+  .drive-buttons button:active { transform: scale(0.94); }
+  .drive-buttons #btn-playpause { width: 52px; height: 48px; border: none; background: #16a34a; color: #fff; }
+  .drive-buttons #btn-playpause.playing { background: #e7000b; }
+  .drive-buttons #btn-playpause svg { width: 26px; height: 26px; }
+  .drive-buttons .small { width: 40px; height: 40px; border-radius: 12px; color: #dedede; }
+  .drive-buttons .small svg { width: 19px; height: 19px; }
+  .drive-buttons #btn-mute.muted { color: #f87171; }
+  #btn-playpause .i-pause, #btn-playpause.playing .i-play, #btn-mute .i-mute, #btn-mute.muted .i-vol { display: none; }
+  #btn-playpause.playing .i-pause, #btn-mute.muted .i-mute { display: block; }
 
   /* Chế độ phóng to */
   #app.focus-map #music-pane { display: none; }
@@ -576,9 +587,11 @@
   <section id="music-pane">
     <div class="head">
       <div class="drive-buttons">
-        <button id="btn-prev" title="Video trước">⏮</button>
-        <button id="btn-playpause" title="Phát / Tạm dừng">⏯</button>
-        <button id="btn-next" title="Video sau">⏭</button>
+        <button id="btn-prev" title="Video trước"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="2.6" height="14" rx="1"/><path d="M19 5.8v12.4a1 1 0 0 1-1.55.83L9.2 13.2a1.4 1.4 0 0 1 0-2.4l8.25-5.83A1 1 0 0 1 19 5.8z"/></svg></button>
+        <button id="btn-playpause" title="Phát / Tạm dừng"><svg class="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.6v12.8a1.2 1.2 0 0 0 1.8 1.04l10.4-6.4a1.2 1.2 0 0 0 0-2.08L9.8 4.56A1.2 1.2 0 0 0 8 5.6z"/></svg><svg class="i-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1.3"/><rect x="13.5" y="5" width="4" height="14" rx="1.3"/></svg></button>
+        <button id="btn-next" title="Video sau"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="16.4" y="5" width="2.6" height="14" rx="1"/><path d="M5 5.8v12.4a1 1 0 0 0 1.55.83l8.25-5.83a1.4 1.4 0 0 0 0-2.4L6.55 4.97A1 1 0 0 0 5 5.8z"/></svg></button>
+        <button id="btn-replay" class="small" title="Phát lại từ đầu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4h4"/></svg></button>
+        <button id="btn-mute" class="small" title="Tắt / bật tiếng video"><svg class="i-vol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><svg class="i-mute" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
       </div>
       <div class="head-buttons">
         <button class="expand-btn" id="btn-list" title="Xem danh sách video">☰ Danh sách</button>
@@ -729,7 +742,12 @@ const DEFAULT_CENTER = [108.0, 16.05]; // Việt Nam (khi chưa có GPS), thứ 
 const MAP_TILES_URL = 'https://tiles.openfreemap.org/planet';
 const MAP_FONTS_URL = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
 const NAV_ZOOM = 16;           // mức phóng khi dẫn đường, đủ xa để thấy trước các lối rẽ
-const NAV_MIN_ZOOM = 14;       // thu nhỏ quá mức này thì lần cập nhật GPS sau tự phóng lại
+const NAV_MIN_ZOOM = 14;
+// Sắp tới ngã nhiều lối (hoặc bước rẽ khi dẫn đường) thì phóng to bản đồ để dễ nhìn đường rẽ, qua rồi trả lại
+const JUNCTION_ZOOM_M = 200;     // bắt đầu phóng to khi còn cách ngã chừng này
+const JUNCTION_ZOOM_IN = 1.2;    // phóng thêm chừng này mức
+const JUNCTION_ZOOM_MAX = 18.5;
+const MAJOR_ROAD_TYPES = ['motorway', 'trunk', 'primary'];   // cắt qua đường loại này là ngã lớn       // thu nhỏ quá mức này thì lần cập nhật GPS sau tự phóng lại
 const NAV_PITCH = 50;          // độ nghiêng bản đồ
 const NAV_TOP_PADDING = 0.5;   // phần trên màn hình dành cho đường phía trước, mũi tên nằm ở dưới
 const SNAP_ROAD_M = 20;        // GPS cách đường không quá chừng này thì đặt mũi tên lên mặt đường
@@ -1253,6 +1271,9 @@ function placeArrow(lon, lat, rotation) {
 // Từ lần GPS trước mà chưa có khung hình nào thì nhảy thẳng tới vị trí mới và tự vẽ.
 let frameSeen = true;
 let lastCameraAt = 0;
+let junctionNear = false;          // sắp tới ngã nhiều lối / bước rẽ, xem JUNCTION_ZOOM_M
+let zoomBeforeJunction = null;
+let zoomRestoreTo = null;
 function moveCamera(instant) {
   if (!map || !follow || !carPos) return;
   const now = Date.now();
@@ -1267,6 +1288,23 @@ function moveCamera(instant) {
     essential: true
   };
   if (carPos.heading != null) camera.bearing = carPos.heading;
+  // Phóng to khi sắp tới ngã: nhớ mức đang dùng để qua ngã thì trả về đúng mức đó.
+  // Nếu bạn tự đổi mức phóng trong lúc đó thì giữ mức của bạn, không trả về.
+  if (junctionNear && zoomBeforeJunction == null && map.getZoom() >= NAV_MIN_ZOOM) zoomBeforeJunction = map.getZoom();
+  if (zoomBeforeJunction != null) {
+    const boosted = Math.min(JUNCTION_ZOOM_MAX, zoomBeforeJunction + JUNCTION_ZOOM_IN);
+    if (junctionNear) {
+      camera.zoom = boosted;
+    } else {
+      if (Math.abs(map.getZoom() - boosted) < 0.3) zoomRestoreTo = zoomBeforeJunction;
+      zoomBeforeJunction = null;
+    }
+  }
+  // Trả về mức cũ qua vài lần GPS: lần di chuyển sau có thể cắt ngang lần trước giữa chừng
+  if (zoomRestoreTo != null) {
+    if (junctionNear || Math.abs(map.getZoom() - zoomRestoreTo) < 0.05) zoomRestoreTo = null;
+    else camera.zoom = zoomRestoreTo;
+  }
   if (map.getZoom() < NAV_MIN_ZOOM) {
     camera.zoom = NAV_ZOOM;
     camera.duration = 0;
@@ -1583,6 +1621,7 @@ function decodeWay(record, index, key) {
   return {
     id: key + ':' + index,
     name,
+    type: ROAD_TYPES[type],
     oneway: oneway > 0,
     reversed: oneway === 2,
     limitForward,
@@ -1813,7 +1852,7 @@ function nextCrossRoad(match) {
   // heading: hướng của đoạn đường đang chạy tại điểm giao; exits: các hướng có thể rẽ vào
   const consider = (dist, way, heading, exits) => {
     if (dist < CROSS_ROAD_MIN_M || dist > CROSS_ROAD_M) return;
-    hits.push({ dist, name: way.name, turns: exits.map(([x, y]) => angleDelta(heading, Math.atan2(x, y) * 180 / Math.PI)) });
+    hits.push({ dist, name: way.name, major: MAJOR_ROAD_TYPES.includes(way.type), turns: exits.map(([x, y]) => angleDelta(heading, Math.atan2(x, y) * 180 / Math.PI)) });
   };
   const tiles = new Set(path.flatMap(p => tilesNear(p[0], p[1])));
   for (const key of tiles) {
@@ -1865,7 +1904,9 @@ function nextCrossRoad(match) {
   for (const turn of turns.filter(a => Math.abs(a) <= JUNCTION_BACK_ANGLE).sort((a, b) => a - b)) {
     if (!exits.length || turn - exits[exits.length - 1] >= JUNCTION_MERGE_ANGLE) exits.push(turn);
   }
-  return { dist: first.dist, name: first.name, exits };
+  // Ngã lớn: cắt qua đường chính (quốc lộ, đường trục), để phóng to bản đồ khi tới gần
+  const major = hits.some(h => h.major && h.dist <= first.dist + JUNCTION_SPREAD_M);
+  return { dist: first.dist, name: first.name, exits, major };
 }
 
 /* ---------- Khung làn đường và hình ngã phía trước (kiểu Vietmap Live) ----------
@@ -2218,6 +2259,9 @@ function updateCrossRoad(match) {
   guide = cross ? { angle: 0, dist: Math.round(cross.dist / 10) * 10 + ' m', name: cross.name, then: null, nav: false } : null;
   drawGuideCard();
   const showJunction = !!cross && cross.dist <= JUNCTION_WARN_M && cross.exits.length >= JUNCTION_MIN_EXITS;
+  // Chỉ phóng to ở ngã lớn (cắt qua đường chính) hoặc ngã từ 4 lối trở lên; ngã tư thường trong phố thì không,
+  // kẻo cứ vài trăm mét lại phóng to rồi thu nhỏ
+  junctionNear = !!cross && cross.dist <= JUNCTION_ZOOM_M && (cross.major || cross.exits.length >= 4);
   // Chưa dẫn đường: chưa biết sẽ đi lối nào, dữ liệu đường cũng không có làn nên mỗi lối một ô trắng
   showLaneGuide(showJunction ? { lanes: null, exits: cross.exits, choose: null } : null);
 }
@@ -2607,8 +2651,11 @@ if (map) map.on('styleimagemissing', function (e) {
 
 /* ---------- Cảnh báo sắp tới camera ----------
    Lấy camera gần nhất nằm trên con đường xe đang chạy, phía trước (xem aheadOnRoad).
-   Chưa khớp được đường thì lấy camera nằm trên hướng xe; chưa biết hướng xe thì tính mọi phía. */
+   Chưa khớp được đường thì lấy camera nằm trên hướng xe; chưa biết hướng xe thì không báo. */
 function nearestCameraAhead(lat, lon, heading, ahead) {
+  // Chưa biết hướng xe (vừa mở trang, xe chưa chạy) thì không biết camera nào ở phía trước:
+  // không báo, kẻo báo cả camera ở đường bên cạnh hay phía sau
+  if (heading == null) return null;
   let best = null;
   const found = [];   // mọi camera phía trước trong CAM_WARN_M, để chỉ hiện các camera này trên bản đồ
   for (const features of signTiles.values()) {
@@ -3234,6 +3281,7 @@ function updateNav(lat, lon, heading) {
     : null;
   showGuidance(angle, formatDistance(Math.max(0, next.atM - best.along)), stepLabel(next), then);
   showLaneGuide(next.atM - best.along <= NAV_LANE_M ? stepLaneInfo(next) : null);
+  junctionNear = next.maneuver.type !== 'arrive' && next.atM - best.along <= JUNCTION_ZOOM_M;
   voiceTurn(next, next.atM - best.along);
   renderNavBar(Math.max(0, total - best.along));
 }
@@ -4307,6 +4355,28 @@ document.getElementById('btn-playpause').addEventListener('click', () => {
   if (videoEl.paused) videoEl.play().catch(function () {});
   else videoEl.pause();
 });
+document.getElementById('btn-replay').addEventListener('click', () => {
+  if (!videoEl.currentSrc) return;
+  videoEl.currentTime = 0;
+  videoEl.play().catch(function () {});
+});
+// Tắt tiếng bằng tay: nếu giọng đọc đang tạm tắt tiếng video thì để nó khỏi bật lại
+document.getElementById('btn-mute').addEventListener('click', () => {
+  if (voiceMutedVideo) {
+    voiceMutedVideo = false;
+    videoEl.muted = true;
+  } else {
+    videoEl.muted = !videoEl.muted;
+  }
+  renderPlayButtons();
+});
+// Nút phát đổi màu theo trạng thái; nút tiếng chỉ báo tắt khi chính bạn tắt, không tính lúc giọng đọc tạm tắt
+function renderPlayButtons() {
+  document.getElementById('btn-playpause').classList.toggle('playing', !videoEl.paused);
+  document.getElementById('btn-mute').classList.toggle('muted', videoEl.muted && !voiceMutedVideo);
+}
+for (const ev of ['play', 'playing', 'pause', 'ended', 'emptied', 'volumechange']) videoEl.addEventListener(ev, renderPlayButtons);
+renderPlayButtons();
 
 // Phóng to / thu nhỏ (bản đồ full màn hình, video phóng to trong nửa bên phải)
 function setFocus(pane) {
