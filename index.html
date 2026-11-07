@@ -500,8 +500,11 @@ const INVIDIOUS_INSTANCES = [
 ];
 const INSTANCE_LIST_URL = 'https://api.invidious.io/instances.json';
 const ROAD_DATA_URL = 'data/roads/';
-const SIGN_DATA_URL = 'data/signs/';
-const CAM_DATA_URL = 'data/cams/';
+// Các file dưới đây tạo bằng tools/build_map_data.py
+const SIGN_DATA_URL = 'data/signs/';    // biển báo và camera
+const SIGN_TYPES_URL = 'data/types.json';
+const SIGN_ICON_URL = 'data/icons/';
+const SPEED_DATA_URL = 'data/speed/';   // giới hạn tốc độ theo đoạn đường
 const PLACE_SEARCH_URL = 'https://photon.komoot.io/api/?limit=8&bbox=102,8,110,24';  // chỉ tìm trong Việt Nam
 const NAV_ROUTE_URL = 'https://router.project-osrm.org/route/v1/driving/';
 const NAV_OFF_ROUTE_M = 50;    // xe lệch tuyến quá chừng này
@@ -543,8 +546,8 @@ const JUNCTION_BACK_ANGLE = 150; // lối quay ngược lại quá chừng này 
 const JUNCTION_STRAIGHT_M = 20;  // còn đường đi tiếp ít nhất chừng này thì có lối đi thẳng
 const SAME_ROAD_JOIN_M = 15;   // đoạn sau của cùng con đường bắt đầu trong khoảng này
 const SAME_ROAD_TURN = 60;     // và rẽ không quá chừng này độ
-// Phải giống SIGN_TYPES trong tools/build_signs.py
-const SIGN_TYPES = ['light', 'stop', 'give_way', 'camera', 'speed', 'fuel'];
+const SPEED_MATCH_M = 25;      // đoạn có giới hạn tốc độ xa hơn khoảng này thì không tính
+const SPEED_CELL_DEG = 0.005;  // chia ô tốc độ thành ô nhỏ cỡ 500 m để tìm nhanh
 const DEFAULT_CENTER = [108.0, 16.05]; // Việt Nam (khi chưa có GPS), thứ tự kinh độ, vĩ độ
 const MAP_TILES_URL = 'https://tiles.openfreemap.org/planet';
 const MAP_FONTS_URL = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
@@ -672,17 +675,14 @@ const NAV_MAP_STYLE = {
         'text-color': ['case', isMainRoad, '#f5d9a8', '#e8ecf2'],
         'text-halo-color': '#17202c', 'text-halo-width': 2
       } },
-    { id: 'sign', type: 'symbol', source: 'signs', minzoom: 14,
+    // Cây xăng lấy thẳng từ nền bản đồ OpenFreeMap (OpenStreetMap). Tên hiện khi đủ chỗ, không che tên đường
+    { id: 'fuel', type: 'symbol', source: 'osm', 'source-layer': 'poi', minzoom: 14,
+      filter: ['==', ['get', 'class'], 'fuel'],
       layout: {
-        'icon-image': ['get', 'icon'],
-        // Camera vẽ sau cùng để không bị đèn hay cây xăng cùng chỗ che mất
-        'symbol-sort-key': ['case', ['get', 'isCamera'], 1, 0],
+        'icon-image': 'sign-fuel',
         'icon-size': ['interpolate', ['linear'], ['zoom'], 14, 0.65, 16, 1, 18, 1.25],
         'icon-allow-overlap': true,
-        'icon-ignore-placement': true,
         'icon-pitch-alignment': 'viewport',
-        'icon-rotation-alignment': 'viewport',
-        // Tên cây xăng: hiện khi đủ chỗ, không che tên đường
         'text-field': ['coalesce', ['get', 'name'], ''],
         'text-font': ['Noto Sans Regular'],
         'text-size': 13,
@@ -691,6 +691,27 @@ const NAV_MAP_STYLE = {
         'text-optional': true
       },
       paint: { 'text-color': '#8ff0b4', 'text-halo-color': '#17202c', 'text-halo-width': 1.5 } },
+    // Biển báo: nhiều biển sát nhau thì chỉ hiện biển không bị che, đỡ rối
+    { id: 'sign', type: 'symbol', source: 'signs', minzoom: 15,
+      filter: ['!', ['get', 'isCamera']],
+      layout: {
+        'icon-image': ['get', 'icon'],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 15, 0.7, 17, 1, 18, 1.2],
+        'icon-padding': 1,
+        'icon-pitch-alignment': 'viewport',
+        'icon-rotation-alignment': 'viewport'
+      } },
+    // Camera luôn hiện, vẽ trên biển báo
+    { id: 'camera', type: 'symbol', source: 'signs', minzoom: 14,
+      filter: ['get', 'isCamera'],
+      layout: {
+        'icon-image': ['get', 'icon'],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 14, 0.65, 16, 1, 18, 1.25],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-pitch-alignment': 'viewport',
+        'icon-rotation-alignment': 'viewport'
+      } },
     // Vẽ trong bản đồ chứ không dùng Marker, để lớp video lúc khóa máy cũng thấy
     { id: 'search-place', type: 'symbol', source: 'search-place',
       layout: {
@@ -1587,9 +1608,14 @@ function updateLimitFromRoads(lat, lon, heading) {
     currentWayId = way.id;
     lastLimitAt = Date.now();
     highlightRoad(way);
-    if (known) renderSpeedLimit(known, false);
+    const limit = matchSpeedLimit(lat, lon, heading) || known;
+    if (limit) renderSpeedLimit(limit, false);
     else renderSpeedLimit(way.estimate, true);
     if (way.name) setStatus(way.name);
+  } else if (matchSpeedLimit(lat, lon, heading)) {
+    // Không khớp được đường trong data/roads nhưng vẫn có giới hạn tốc độ
+    lastLimitAt = Date.now();
+    renderSpeedLimit(matchSpeedLimit(lat, lon, heading), false);
   } else {
     if (Date.now() - lastLimitAt > LIMIT_STALE_MS) {
       currentWayId = null;
@@ -1602,42 +1628,142 @@ function updateLimitFromRoads(lat, lon, heading) {
   }
 }
 
-/* ---------- Đèn giao thông, biển báo và camera tốc độ ----------
-   Đọc từ SIGN_DATA_URL (tạo bằng tools/build_signs.py) và CAM_DATA_URL (tools/build_cams.py),
-   chia ô giống dữ liệu đường.
-   Đèn chỉ là biểu tượng vị trí: không có dữ liệu đèn đang xanh hay đỏ. */
+/* ---------- Giới hạn tốc độ theo đoạn đường ----------
+   Đọc từ SPEED_DATA_URL, chia ô giống dữ liệu đường. Mỗi đoạn có giới hạn cho chiều thuận và chiều ngược.
+   Có số ở đây thì dùng, không thì mới dùng số của OpenStreetMap trong data/roads. */
+const speedTiles = new Map();   // 'x_y' -> Map(ô nhỏ -> các đoạn [lat1, lon1, lat2, lon2, thuận, ngược])
+const speedLoading = new Set();
+const speedRetryAt = new Map();
+
+function speedCellKey(lat, lon) {
+  return Math.floor(lon / SPEED_CELL_DEG) + '_' + Math.floor(lat / SPEED_CELL_DEG);
+}
+
+async function loadSpeedTile(key) {
+  speedLoading.add(key);
+  try {
+    const r = await fetchWithTimeout(SPEED_DATA_URL + key + '.json', 30000);
+    if (r.status !== 404 && !r.ok) throw new Error('HTTP ' + r.status);
+    const flat = r.status === 404 ? [] : (await r.json()).s;   // 404 = ô không có dữ liệu
+    const [x0, y0] = key.split('_').map(v => Number(v) * ROAD_TILE_DEG);
+    const cells = new Map();
+    for (let i = 0; i + 5 < flat.length; i += 6) {
+      const seg = [y0 + flat[i + 1] / 1e5, x0 + flat[i] / 1e5, y0 + flat[i + 3] / 1e5, x0 + flat[i + 2] / 1e5,
+                   flat[i + 4], flat[i + 5]];
+      // Đưa đoạn vào mọi ô nhỏ mà khung bao của nó chạm tới
+      const cx0 = Math.floor(Math.min(seg[1], seg[3]) / SPEED_CELL_DEG), cx1 = Math.floor(Math.max(seg[1], seg[3]) / SPEED_CELL_DEG);
+      const cy0 = Math.floor(Math.min(seg[0], seg[2]) / SPEED_CELL_DEG), cy1 = Math.floor(Math.max(seg[0], seg[2]) / SPEED_CELL_DEG);
+      for (let cx = cx0; cx <= cx1; cx++) {
+        for (let cy = cy0; cy <= cy1; cy++) {
+          const k = cx + '_' + cy;
+          if (!cells.has(k)) cells.set(k, []);
+          cells.get(k).push(seg);
+        }
+      }
+    }
+    speedTiles.set(key, cells);
+    speedRetryAt.delete(key);
+    const near = lastPoint ? tilesNear(lastPoint.lat, lastPoint.lon) : [];
+    for (const k of speedTiles.keys()) {
+      if (speedTiles.size <= ROAD_TILES_IN_MEMORY) break;
+      if (!near.includes(k)) speedTiles.delete(k);
+    }
+  } catch (e) {
+    speedRetryAt.set(key, Date.now() + 20000);
+  }
+  speedLoading.delete(key);
+  if (lastPoint) updateLimitFromRoads(lastPoint.lat, lastPoint.lon, lastPoint.heading);
+}
+
+// Giới hạn của đoạn gần xe nhất và cùng hướng với xe. Chưa biết hướng thì chỉ nhận đoạn có hai chiều như nhau.
+function matchSpeedLimit(lat, lon, heading) {
+  const cosLat = Math.cos(lat * Math.PI / 180);
+  const seen = new Set();
+  let best = null;
+  for (const da of [-SPEED_CELL_DEG, 0, SPEED_CELL_DEG]) {
+    for (const db of [-SPEED_CELL_DEG, 0, SPEED_CELL_DEG]) {
+      const tile = speedTiles.get(Math.floor((lon + db) / ROAD_TILE_DEG) + '_' + Math.floor((lat + da) / ROAD_TILE_DEG));
+      const segs = tile && tile.get(speedCellKey(lat + da, lon + db));
+      if (!segs) continue;
+      for (const seg of segs) {
+        if (seen.has(seg)) continue;
+        seen.add(seg);
+        const ax = (seg[1] - lon) * 111320 * cosLat, ay = (seg[0] - lat) * 111320;
+        const sx = (seg[3] - lon) * 111320 * cosLat - ax, sy = (seg[2] - lat) * 111320 - ay;
+        const len2 = sx * sx + sy * sy;
+        if (!len2) continue;
+        const u = Math.max(0, Math.min(1, -(ax * sx + ay * sy) / len2));
+        const dist = Math.hypot(ax + u * sx, ay + u * sy);
+        if (dist > SPEED_MATCH_M) continue;
+        let score = dist, limit = seg[4];
+        if (heading != null) {
+          const diff = Math.abs(angleDelta((Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360, heading));
+          if (diff > 90) limit = seg[5];
+          score += Math.min(diff, 180 - diff) * 0.5;
+        } else if (seg[4] !== seg[5]) {
+          continue;
+        }
+        if (limit && (!best || score < best.score)) best = { score, limit };
+      }
+    }
+  }
+  return best && best.limit;
+}
+
+/* ---------- Biển báo và camera ----------
+   Đọc từ SIGN_DATA_URL, chia ô giống dữ liệu đường. Icon lấy từ SIGN_ICON_URL theo danh sách SIGN_TYPES_URL.
+   Biển đèn giao thông chỉ là vị trí: không có dữ liệu đèn đang xanh hay đỏ. */
 const signTiles = new Map();    // 'x_y' -> các điểm của ô đó, dạng GeoJSON
 const signRetryAt = new Map();
+const signImages = new Map();   // tên icon -> ảnh đã tải xong
+let signTypes = null;           // { signs: [[mã, tên, file icon]], cams: [...] }
+
+// Tải danh sách loại và mọi icon một lần. Chưa xong thì chưa vẽ biển lên bản đồ.
+const signTypesReady = (async function () {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await fetchWithTimeout(SIGN_TYPES_URL, 20000);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      signTypes = await r.json();
+      break;
+    } catch (e) {
+      await new Promise(done => setTimeout(done, Math.min(60000, 5000 * (attempt + 1))));
+    }
+  }
+  const all = [...signTypes.signs.map((t, i) => ['sb-' + i, t[2]]), ...signTypes.cams.map((t, i) => ['sc-' + i, t[2]])];
+  await Promise.all(all.map(([id, file]) => new Promise(done => {
+    const img = new Image();
+    img.onload = () => { signImages.set(id, img); done(); };
+    img.onerror = () => done();   // thiếu icon thì biển đó không hiện, các biển khác vẫn hiện
+    img.src = SIGN_ICON_URL + file;
+  })));
+  renderSigns();
+})();
 
 function renderSigns() {
   const source = map && map.getSource('signs');
-  if (source) source.setData({ type: 'FeatureCollection', features: Array.from(signTiles.values()).flat() });
+  if (!source || !signTypes) return;
+  source.setData({ type: 'FeatureCollection', features: Array.from(signTiles.values()).flat() });
 }
 if (map) map.on('load', renderSigns);
-
-async function fetchSignRecords(baseUrl, key) {
-  const r = await fetchWithTimeout(baseUrl + key + '.json', 20000);
-  if (r.status === 404) return [];   // ô không có điểm nào
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r.json();
-}
 
 async function loadSignTile(key) {
   signTiles.set(key, []);     // đánh dấu để không tải trùng
   try {
-    const [signs, cams] = await Promise.all([
-      fetchSignRecords(SIGN_DATA_URL, key),
-      fetchSignRecords(CAM_DATA_URL, key)
+    await signTypesReady;
+    const r = await fetchWithTimeout(SIGN_DATA_URL + key + '.json', 20000);
+    if (r.status !== 404 && !r.ok) throw new Error('HTTP ' + r.status);
+    const tile = r.status === 404 ? { b: [], c: [] } : await r.json();   // 404 = ô không có biển nào
+    const point = (lat, lon, properties) => ({
+      type: 'Feature', properties, geometry: { type: 'Point', coordinates: [lon / 1e5, lat / 1e5] }
+    });
+    signTiles.set(key, [
+      ...tile.b.map(([lat, lon, type, heading]) => point(lat, lon, { icon: 'sb-' + type, heading, isCamera: false })),
+      // Camera có giới hạn tốc độ: icon kèm con số, ví dụ sc-3-60
+      ...tile.c.map(([lat, lon, type, limit]) => point(lat, lon, {
+        icon: 'sc-' + type + (limit ? '-' + limit : ''), name: signTypes.cams[type][1], isCamera: true
+      }))
     ]);
-    signTiles.set(key, signs.concat(cams).map(([lat, lon, type, value, name]) => ({
-      type: 'Feature',
-      properties: {
-        icon: 'sign-' + SIGN_TYPES[type] + (value ? '-' + value : ''),
-        name: name || '',
-        isCamera: SIGN_TYPES[type] === 'camera'
-      },
-      geometry: { type: 'Point', coordinates: [lon / 1e5, lat / 1e5] }
-    })));
     const near = lastPoint ? tilesNear(lastPoint.lat, lastPoint.lon) : [];
     for (const k of signTiles.keys()) {
       if (signTiles.size <= ROAD_TILES_IN_MEMORY) break;
@@ -1650,53 +1776,29 @@ async function loadSignTile(key) {
   }
 }
 
-// Vẽ biểu tượng lúc bản đồ cần tới, không cần file ảnh
+// Vẽ biểu tượng lúc bản đồ cần tới
 const SIGN_ICON_PX = 64;
 function drawSignIcon(ctx, id) {
   const S = SIGN_ICON_PX, c = S / 2;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  if (id === 'sign-light') {
-    ctx.fillStyle = '#10151c';
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.roundRect(c - 14, 3, 28, S - 6, 8);
-    ctx.fill();
-    ctx.stroke();
-    ['#ef4444', '#facc15', '#22c55e'].forEach((color, i) => {
-      ctx.fillStyle = color;
+  if (id.indexOf('sb-') === 0 || id.indexOf('sc-') === 0) {
+    const [group, type, limit] = id.split('-');
+    const img = signImages.get(group + '-' + type);
+    if (img) ctx.drawImage(img, 0, 0, S, S);
+    if (limit) {
+      // Giới hạn tốc độ của camera: biển tròn nhỏ ở góc dưới bên phải
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#dc2626';
+      ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.arc(c, 15 + i * 17, 6.5, 0, Math.PI * 2);
+      ctx.arc(S - 17, S - 17, 15, 0, Math.PI * 2);
       ctx.fill();
-    });
-  } else if (id === 'sign-stop') {
-    ctx.fillStyle = '#dc2626';
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const a = Math.PI / 8 + i * Math.PI / 4;
-      ctx.lineTo(c + Math.cos(a) * 29, c + Math.sin(a) * 29);
+      ctx.stroke();
+      ctx.fillStyle = '#111';
+      ctx.font = 'bold ' + (limit.length > 2 ? 13 : 16) + 'px Arial';
+      ctx.fillText(limit, S - 17, S - 16);
     }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 17px Arial';
-    ctx.fillText('STOP', c, c + 1);
-  } else if (id === 'sign-give_way') {
-    ctx.fillStyle = '#fff';
-    ctx.strokeStyle = '#dc2626';
-    ctx.lineWidth = 8;
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(7, 10);
-    ctx.lineTo(S - 7, 10);
-    ctx.lineTo(c, S - 7);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
   } else if (id === 'sign-fuel') {
     ctx.fillStyle = '#15803d';
     ctx.strokeStyle = '#fff';
@@ -1740,46 +1842,10 @@ function drawSignIcon(ctx, id) {
     ctx.beginPath();
     ctx.arc(c, 24, 7, 0, Math.PI * 2);
     ctx.fill();
-  } else if (id.indexOf('sign-camera') === 0) {
-    // Camera có giới hạn tốc độ: thay ống kính bằng con số, ví dụ sign-camera-60
-    const limit = id.split('-')[2];
-    ctx.fillStyle = '#1d4ed8';
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.roundRect(4, 4, S - 8, S - 8, 10);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#fff';
-    if (limit) {
-      ctx.fillRect(10, 20, 44, 34);
-      ctx.fillRect(22, 12, 20, 8);
-      ctx.fillStyle = '#dc2626';
-      ctx.font = 'bold 28px Arial';
-      ctx.fillText(limit, c, 38);
-    } else {
-      ctx.fillRect(12, 22, 40, 26);
-      ctx.fillRect(22, 15, 18, 8);
-      ctx.fillStyle = '#1d4ed8';
-      ctx.beginPath();
-      ctx.arc(c, 35, 9, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  } else {
-    ctx.fillStyle = '#fff';
-    ctx.strokeStyle = '#dc2626';
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.arc(c, c, 26, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#111';
-    ctx.font = 'bold 25px Arial';
-    ctx.fillText(id.split('-')[2], c, c + 1);
   }
 }
 if (map) map.on('styleimagemissing', function (e) {
-  if (e.id.indexOf('sign-') !== 0) return;
+  if (!/^(sign|sb|sc)-/.test(e.id)) return;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = SIGN_ICON_PX;
   const ctx = canvas.getContext('2d');
@@ -2410,6 +2476,10 @@ function lookupSpeedLimit(lat, lon, heading) {
   for (const key of tilesNear(lat, lon)) {
     if (signTiles.has(key) || Date.now() < (signRetryAt.get(key) || 0)) continue;
     loadSignTile(key);
+  }
+  for (const key of tilesNear(lat, lon)) {
+    if (speedTiles.has(key) || speedLoading.has(key) || Date.now() < (speedRetryAt.get(key) || 0)) continue;
+    loadSpeedTile(key);
   }
   for (const key of tilesNear(lat, lon)) {
     if (roadTiles.has(key) || tilesLoading.has(key)) continue;

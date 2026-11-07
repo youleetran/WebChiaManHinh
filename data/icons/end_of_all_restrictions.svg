@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5A9DFF"/><stop offset="1" stop-color="#2E81FF"/>
+    </linearGradient>
+    <clipPath id="in"><circle cx="60" cy="60" r="53"/></clipPath>
+  </defs>
+  <circle cx="60" cy="60" r="56.5" fill="#F1F5FB" stroke="url(#ring)" stroke-width="7"/>
+  <g clip-path="url(#in)" stroke="#3A404B" stroke-width="3.4" stroke-linecap="round">
+    <line x1="13.23" y1="89.23" x2="89.23" y2="13.23"/>
+    <line x1="17.62" y1="93.62" x2="93.62" y2="17.62"/>
+    <line x1="22.00" y1="98.00" x2="98.00" y2="22.00"/>
+    <line x1="26.38" y1="102.38" x2="102.38" y2="26.38"/>
+    <line x1="30.77" y1="106.77" x2="106.77" y2="30.77"/>
+  </g>
+</svg>
