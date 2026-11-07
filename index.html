@@ -129,6 +129,40 @@
   #map-pane.place-detail #cam-warning, #map-pane.place-detail #map-side, #map-pane.place-detail #gps-status,
   #map-pane.place-detail #speed-glow, #map-pane.place-detail .maplibregl-ctrl-bottom-right { display: none; }
 
+  /* Bảng cài đặt mở từ nút 3 gạch */
+  #settings {
+    position: absolute; z-index: 1100; left: 10px; top: 10px; bottom: 10px; width: 300px; max-width: calc(100% - 20px);
+    display: flex; flex-direction: column; background: var(--panel); color: var(--text);
+    border-radius: 14px; box-shadow: 0 3px 12px rgba(0,0,0,0.5); overflow: hidden;
+  }
+  #settings.hidden { display: none; }
+  #settings-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 6px 4px 14px; flex: none; }
+  #settings-head b { font-size: 18px; }
+  #settings-close { width: 44px; height: 44px; background: none; border: none; color: var(--text); font-size: 22px; cursor: pointer; }
+  #settings-body { overflow-y: auto; padding: 0 10px 10px; }
+  .settings-title { font-size: 13px; color: var(--muted); margin: 4px 4px 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .voice-item {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 46px; padding: 0 12px; margin-bottom: 6px;
+    background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
+    font-size: 16px; text-align: left; cursor: pointer;
+  }
+  .voice-item i { flex: none; width: 20px; height: 20px; border: 2px solid var(--muted); border-radius: 50%; }
+  .voice-item.on { border-color: #2fe0e6; }
+  .voice-item.on i { border-color: #2fe0e6; background: radial-gradient(#2fe0e6 45%, transparent 50%); }
+  .settings-note { font-size: 13px; color: var(--muted); margin: 4px 4px 0; line-height: 1.4; }
+  /* Công tắc bật/tắt tiếng */
+  #sound-toggle {
+    display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 46px; padding: 0 12px; margin-bottom: 10px;
+    background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 10px; font-size: 16px; cursor: pointer;
+  }
+  #sound-toggle i { position: relative; flex: none; width: 46px; height: 26px; border-radius: 13px; background: #4a5568; transition: background 0.15s; }
+  #sound-toggle i::after {
+    content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left 0.15s;
+  }
+  #sound-toggle.on i { background: #12c2e9; }
+  #sound-toggle.on i::after { left: 23px; }
+  #voice-list.off { opacity: 0.5; }
+
   /* Lúc đang dẫn đường: khung rẽ rộng tới sát bảng tốc độ, thanh giờ tới ở dưới */
   #map-pane.nav #cross-road { width: calc(100% - 140px); height: 52px; }
   #map-pane.nav #cross-road > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1; }
@@ -431,9 +465,20 @@
       <button class="side-btn" id="btn-search" title="Tìm địa điểm">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><path d="M16 16l5 5"/></svg>
       </button>
-      <button class="side-btn" id="btn-menu" title="Menu (sẽ thêm chức năng sau)">
+      <button class="side-btn" id="btn-menu" title="Cài đặt">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
+    </div>
+
+    <div id="settings" class="hidden">
+      <div id="settings-head"><b>Cài đặt</b><button type="button" id="settings-close" title="Đóng">✕</button></div>
+      <div id="settings-body">
+        <div class="settings-title">Âm thanh</div>
+        <button type="button" id="sound-toggle"><span id="sound-toggle-text">Tiếng cảnh báo</span><i></i></button>
+        <div class="settings-title">Giọng đọc cảnh báo</div>
+        <div id="voice-list"></div>
+        <div class="settings-note" id="voice-note"></div>
+      </div>
     </div>
 
     <div id="map-tools" class="maplibregl-ctrl maplibregl-ctrl-group">
@@ -533,6 +578,28 @@ const PLACE_SHORTCUTS = [
   { query: 'trạm sạc', tag: 'amenity:charging_station', icon: '⚡', label: 'Trạm sạc' },
   { query: 'VinFast', tag: 'shop:car', icon: '🚗', label: 'Showroom' }
 ];
+const VOICE_URL = 'Audio/';        // Audio/<giọng>/<câu>.mp3
+const VOICES = [
+  { id: 'north', label: 'Giọng nữ miền Bắc' },
+  { id: 'central', label: 'Giọng nữ miền Trung' },
+  { id: 'south', label: 'Giọng nữ miền Nam' }
+];
+const VOICE_DEFAULT = 'south';
+const VOICE_KEY = 'voice';
+const VOICE_QUEUE_MAX = 3;          // còn nhiều câu chờ đọc hơn chừng này thì bỏ câu mới
+const VOICE_OVER_REPEAT_MS = 15000; // còn chạy quá tốc độ thì nhắc lại sau chừng này
+const VOICE_LIMIT_SAME_FIXES = 3;   // giới hạn mới phải giữ nguyên chừng này lần GPS mới đọc
+const VOICE_LIMIT_GAP_MS = 20000;   // hai lần đọc giới hạn cách nhau ít nhất chừng này
+const VOICE_SIGN_M = 200;        // đọc biển hầm, cấm vượt khi còn cách chừng này
+const VOICE_SIGN_SIDE_M = 40;    // biển lệch sang ngang hơn chừng này là ở đường khác
+const VOICE_SIGN_ANGLE = 45;     // hướng của biển lệch hướng xe quá chừng này là biển của chiều kia
+const VOICE_SIGNS = { tunnel: 'vao_duong_ham', start_of_no_overtaking: 'vao_cam_vuot', end_of_no_overtaking: 'ra_cam_vuot' };
+const VOICE_TURN_EARLY_M = [200, 350]; // đọc "300 m nữa…" khi còn cách bước rẽ trong khoảng này
+const VOICE_TURN_NOW_M = 60;     // đọc lệnh rẽ khi còn cách chừng này
+const VOICE_TURNS = {
+  left: 'turn_left', right: 'turn_right', 'sharp left': 'turn_sharp_left', 'sharp right': 'turn_sharp_right',
+  'slight left': 'turn_slight_left', 'slight right': 'turn_slight_right', straight: 'turn_straight', uturn: 'turn_uturn'
+};
 const CAM_WARN_M = 500;        // camera phía trước trong khoảng này thì nhấp nháy cảnh báo
 const CAM_WARN_SIDE_M = 60;    // camera lệch sang ngang hơn chừng này là ở đường khác, không cảnh báo
 const CROSS_ROAD_M = 500;      // báo đường sắp cắt qua trong khoảng này
@@ -746,8 +813,14 @@ try {
     attributionControl: false,
     preserveDrawingBuffer: true   // để chép hình bản đồ sang lớp video
   });
-  // giấy phép dữ liệu yêu cầu ghi nguồn
-  map.addControl(new maplibregl.AttributionControl({ compact: false }), 'bottom-right');
+  // Giấy phép dữ liệu yêu cầu ghi nguồn. Thu gọn thành nút ⓘ, bấm vào mới hiện dòng chữ
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+  const collapseAttribution = () => {
+    const el = document.querySelector('#map .maplibregl-ctrl-attrib');
+    if (el) el.classList.remove('maplibregl-compact-show');
+  };
+  map.once('load', collapseAttribution);
+  map.once('idle', collapseAttribution);
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
   // Thêm sau nên nằm ngay trên nút + −, luôn thẳng cột dù dòng ghi nguồn có xuống hàng
   map.addControl({ onAdd: () => document.getElementById('map-tools'), onRemove: () => {} }, 'bottom-right');
@@ -763,6 +836,18 @@ let manualMarker = null;    // vị trí đặt tay
 let follow = true;          // tự động bám theo GPS
 let speedLimit = null;      // giới hạn tốc độ đã biết chắc (số ước tính không tính)
 let lastBeep = 0;
+let audioKeepUntil = 0;
+let voice = VOICE_DEFAULT;      // giọng đang chọn, 'off' là tắt giọng chỉ kêu bíp
+try {
+  const saved = localStorage.getItem(VOICE_KEY);
+  if (saved === 'off' || VOICES.some(v => v.id === saved)) voice = saved;
+} catch (e) {}
+const voiceClips = new Map();   // 'giọng/câu' -> Promise của AudioBuffer, null nếu không có file
+const voiceSaid = new Set();    // camera, biển, bước rẽ đã đọc, để không đọc lại
+let voiceChain = Promise.resolve();
+let voiceWaiting = 0;
+let voiceDecoder = null;
+let voiceLimitSeen = null, voiceLimitCount = 0, voiceLimitSaid = null, voiceLimitAt = 0;
 
 // Kéo bản đồ để xem chỗ khác thì tạm thôi bám theo, một lúc sau tự quay về xe.
 // Hẹn giờ ngay từ lúc bắt đầu kéo, vì trên xe có thể không nhận được lúc thả tay.
@@ -1867,7 +1952,7 @@ function nearestCameraAhead(lat, lon, heading) {
         const off = angleDelta(heading, bearingDeg(lat, lon, camLat, camLon)) * Math.PI / 180;
         if (Math.cos(off) <= 0 || dist * Math.abs(Math.sin(off)) > CAM_WARN_SIDE_M) continue;
       }
-      best = { dist, icon: f.properties.icon };
+      best = { dist, icon: f.properties.icon, key: camLat + ',' + camLon };
     }
   }
   return best;
@@ -1879,6 +1964,10 @@ function updateCameraWarning(lat, lon, heading) {
   const cam = nearestCameraAhead(lat, lon, heading);
   box.classList.toggle('hidden', !cam);
   if (!cam) return;
+  if (!voiceSaid.has(cam.key)) {
+    voiceSaid.add(cam.key);
+    sayCamera(cam.icon);
+  }
   document.getElementById('cam-warning-text').textContent = Math.round(cam.dist / 10) * 10 + ' m';
   if (cam.icon !== camWarningIcon) {
     camWarningIcon = cam.icon;
@@ -2273,6 +2362,7 @@ async function requestRoute(lat, lon, heading) {
 }
 
 function arriveAtPlace() {
+  say('arriver');
   navRoute = null;
   navArrived = true;
   setRouteLine(null);
@@ -2308,7 +2398,10 @@ function updateNav(lat, lon, heading) {
   }
   if (!best || best.dist > NAV_OFF_ROUTE_M) {
     navOffFixes++;
-    if (navOffFixes >= NAV_OFF_ROUTE_FIXES) requestRoute(lat, lon, heading);
+    if (navOffFixes >= NAV_OFF_ROUTE_FIXES) {
+      if (!navRequesting && Date.now() >= navRetryAt) say('reroute_warning');
+      requestRoute(lat, lon, heading);
+    }
     return;
   }
   navOffFixes = 0;
@@ -2319,6 +2412,7 @@ function updateNav(lat, lon, heading) {
   const modifier = next.maneuver.modifier;
   const angle = next.maneuver.type === 'arrive' ? 0 : (NAV_TURN_ANGLES[modifier] || 0);
   showGuidance(angle, formatDistance(Math.max(0, next.atM - best.along)), stepLabel(next));
+  voiceTurn(next, next.atM - best.along);
   renderNavBar(Math.max(0, total - best.along));
 }
 
@@ -2435,7 +2529,8 @@ document.getElementById('btn-locate').addEventListener('click', function () {
 });
 document.getElementById('btn-search').addEventListener('click', openPlaceSearch);
 // Nút để dành, chưa có chức năng
-document.getElementById('btn-menu').addEventListener('click', () => setStatus('Menu sẽ có chức năng sau'));
+document.getElementById('btn-menu').addEventListener('click', () => openSettings(true));
+document.getElementById('settings-close').addEventListener('click', () => openSettings(false));
 document.getElementById('place-back').addEventListener('click', closePlaceSearch);
 document.getElementById('nav-stop').addEventListener('click', clearPlace);
 document.getElementById('place-detail-close').addEventListener('click', clearPlace);
@@ -2473,6 +2568,7 @@ function lookupSpeedLimit(lat, lon, heading) {
   lastPoint = { lat, lon, heading };
   updateNav(lat, lon, heading);
   updateCameraWarning(lat, lon, heading);
+  voiceSignsAhead(lat, lon, heading);
   for (const key of tilesNear(lat, lon)) {
     if (signTiles.has(key) || Date.now() < (signRetryAt.get(key) || 0)) continue;
     loadSignTile(key);
@@ -2492,6 +2588,7 @@ function lookupSpeedLimit(lat, lon, heading) {
 // estimated = số ước tính theo loại đường: chỉ hiện để tham khảo, không cảnh báo
 function renderSpeedLimit(limit, estimated) {
   speedLimit = (limit && !estimated) ? limit : null;
+  voiceSpeedLimit(speedLimit);
   const el = document.getElementById('speed-limit');
   const box = document.getElementById('speed-limit-box');
   el.textContent = limit ? (estimated ? '~' + limit : limit) : '--';
@@ -2517,7 +2614,11 @@ function renderCurrentSpeed(kmh) {
   glow.classList.toggle('hidden', !over);
   if (over) {
     const now = Date.now();
-    if (soundOn && now - lastBeep > 4000) { lastBeep = now; beep(); }
+    if (voice !== 'off') {
+      if (soundOn && now - lastBeep > VOICE_OVER_REPEAT_MS) { lastBeep = now; say('over_speed_limit'); }
+    } else if (soundOn && now - lastBeep > 4000) { lastBeep = now; beep(); }
+  } else {
+    lastBeep = 0;   // lần sau vượt thì báo ngay
   }
 }
 
@@ -2526,18 +2627,26 @@ let audioCtx = null;
 let soundOn = true;
 try { soundOn = localStorage.getItem('mazda_sound') !== 'off'; } catch (e) {}
 
+// Nút chuông và công tắc trong Cài đặt cùng bật/tắt mọi tiếng: giọng đọc và tiếng bíp
 function renderSoundButton() {
   const b = document.getElementById('btn-sound');
   b.textContent = soundOn ? '🔔' : '🔕';
   b.classList.toggle('active', soundOn);
+  document.getElementById('sound-toggle').classList.toggle('on', soundOn);
+  document.getElementById('sound-toggle-text').textContent = soundOn ? 'Tiếng cảnh báo: Bật' : 'Tiếng cảnh báo: Tắt';
+  document.getElementById('voice-list').classList.toggle('off', !soundOn);
 }
 renderSoundButton();
-document.getElementById('btn-sound').addEventListener('click', function () {
+function toggleSound() {
   soundOn = !soundOn;
   try { localStorage.setItem('mazda_sound', soundOn ? 'on' : 'off'); } catch (e) {}
   renderSoundButton();
-  if (soundOn) beep();      // kêu thử để biết loa đang hoạt động
-});
+  if (soundOn && !say('camera_speed')) beep();   // kêu thử để biết loa đang hoạt động
+  if (!soundOn) closeAudio();   // tắt thì dừng luôn câu đang đọc
+  if (!document.getElementById('settings').classList.contains('hidden')) renderVoiceList();
+}
+document.getElementById('btn-sound').addEventListener('click', toggleSound);
+document.getElementById('sound-toggle').addEventListener('click', toggleSound);
 // Chỉ mở AudioContext lúc cần kêu rồi đóng ngay: để nó chạy song song với video
 // có thể làm tiếng video bị hụt trên iPhone.
 let audioCloseTimer = null;
@@ -2564,9 +2673,152 @@ function beep() {
       o.connect(g).connect(audioCtx.destination);
       o.start(t + i * 0.25); o.stop(t + i * 0.25 + 0.22);
     }
-    clearTimeout(audioCloseTimer);
-    audioCloseTimer = setTimeout(closeAudio, 1000);
+    keepAudio(1000);
   } catch (e) {}
+}
+// Giữ AudioContext mở ít nhất thêm chừng này, rồi đóng
+function keepAudio(ms) {
+  audioKeepUntil = Math.max(audioKeepUntil, Date.now() + ms);
+  clearTimeout(audioCloseTimer);
+  audioCloseTimer = setTimeout(closeAudio, audioKeepUntil - Date.now());
+}
+
+/* ---------- Giọng đọc cảnh báo ----------
+   Đọc câu ghi sẵn trong VOICE_URL. Phát qua AudioContext để không làm dừng video đang chạy.
+   Các biến của phần này khai báo ở đầu script, cạnh lastBeep. */
+function loadClip(name) {
+  const key = voice + '/' + name;
+  if (!voiceClips.has(key)) {
+    voiceClips.set(key, fetchWithTimeout(VOICE_URL + key + '.mp3', 15000)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+      .then(data => new Promise((done, fail) => {
+        // Giải mã bằng một context riêng không phát tiếng, vì AudioContext để phát bị đóng sau mỗi lần đọc
+        if (!voiceDecoder) voiceDecoder = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100);
+        voiceDecoder.decodeAudioData(data, done, fail);
+      }))
+      .catch(() => { voiceClips.delete(key); return null; }));
+  }
+  return voiceClips.get(key);
+}
+
+function playClip(buffer) {
+  return new Promise(done => {
+    try {
+      ensureAudio();
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      source.onended = done;
+      source.start();
+      keepAudio(buffer.duration * 1000 + 1000);
+      setTimeout(done, buffer.duration * 1000 + 300);   // phòng khi không có sự kiện onended
+    } catch (e) {
+      done();
+    }
+  });
+}
+
+// Đọc lần lượt các câu, nối sau câu đang đọc. force: đọc cả khi đã tắt tiếng (nghe thử trong cài đặt)
+function say(names, force) {
+  if (!force && (!soundOn || voice === 'off')) return false;
+  if (voiceWaiting >= VOICE_QUEUE_MAX) return false;
+  const clips = [].concat(names).map(loadClip);
+  voiceWaiting++;
+  voiceChain = voiceChain.then(async () => {
+    for (const clip of clips) {
+      const buffer = await clip;
+      if (buffer) await playClip(buffer);
+    }
+  }).catch(() => {}).then(() => { voiceWaiting--; });
+  return true;
+}
+
+// Camera làn xe buýt, đèn đỏ: camera_traffic; camera tốc độ: camera_speed, kèm giới hạn nếu có
+function sayCamera(icon) {
+  const [, type, limit] = icon.split('-');
+  const code = signTypes && signTypes.cams[type] ? signTypes.cams[type][0] : 0;
+  const clip = (code === 80 || code === 81) ? 'camera_traffic' : (code === 79 || code === 0) ? 'camera' : 'camera_speed';
+  say(limit ? [clip, 'next_speed_' + limit] : clip);
+}
+
+// Đọc giới hạn tốc độ mới khi đã giữ nguyên vài lần GPS liền, để đường đổi số liên tục không đọc liên tục
+function voiceSpeedLimit(limit) {
+  if (limit !== voiceLimitSeen) { voiceLimitSeen = limit; voiceLimitCount = 0; }
+  voiceLimitCount++;
+  if (!limit || limit === voiceLimitSaid || voiceLimitCount < VOICE_LIMIT_SAME_FIXES) return;
+  if (Date.now() - voiceLimitAt < VOICE_LIMIT_GAP_MS) return;
+  voiceLimitSaid = limit;
+  voiceLimitAt = Date.now();
+  say('current_speed_' + limit);
+}
+
+// Biển hầm, cấm vượt, hết cấm vượt phía trước, cùng chiều xe đang chạy
+function voiceSignsAhead(lat, lon, heading) {
+  if (heading == null || !signTypes) return;
+  for (const features of signTiles.values()) {
+    for (const f of features) {
+      if (f.properties.isCamera) continue;
+      const clip = VOICE_SIGNS[signTypes.signs[f.properties.icon.slice(3)][0]];
+      if (!clip) continue;
+      const [signLon, signLat] = f.geometry.coordinates;
+      const key = signLat + ',' + signLon;
+      if (voiceSaid.has(key)) continue;
+      const dist = distanceM(lat, lon, signLat, signLon);
+      if (dist > VOICE_SIGN_M) continue;
+      if (Math.abs(angleDelta(heading, f.properties.heading)) > VOICE_SIGN_ANGLE) continue;
+      const off = angleDelta(heading, bearingDeg(lat, lon, signLat, signLon)) * Math.PI / 180;
+      if (Math.cos(off) <= 0 || dist * Math.abs(Math.sin(off)) > VOICE_SIGN_SIDE_M) continue;
+      voiceSaid.add(key);
+      say(clip);
+    }
+  }
+}
+
+// Đọc bước rẽ khi dẫn đường: một lần lúc còn khoảng 300 m, một lần lúc sắp tới
+function voiceTurn(step, distM) {
+  const type = step.maneuver.type;
+  if (type === 'arrive') return;   // tới nơi thì đọc trong arriveAtPlace
+  const roundabout = type === 'roundabout' || type === 'rotary';
+  const clip = roundabout
+    ? 'roundabout_' + Math.min(9, Math.max(1, step.maneuver.exit || 1)) + '_exit'
+    : (VOICE_TURNS[step.maneuver.modifier] || 'turn_straight');
+  const key = 'step:' + step.maneuver.location;
+  if (distM >= VOICE_TURN_EARLY_M[0] && distM <= VOICE_TURN_EARLY_M[1] && !voiceSaid.has(key + ':early')) {
+    voiceSaid.add(key + ':early');
+    say('300_' + clip);
+  } else if (distM <= VOICE_TURN_NOW_M && !voiceSaid.has(key + ':now')) {
+    voiceSaid.add(key + ':early');
+    voiceSaid.add(key + ':now');
+    say(clip);
+  }
+}
+
+// Bảng cài đặt: chọn giọng, bấm là nghe thử
+function renderVoiceList() {
+  const list = document.getElementById('voice-list');
+  list.innerHTML = '';
+  for (const item of [...VOICES, { id: 'off', label: 'Tắt giọng đọc (chỉ kêu bíp)' }]) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'voice-item' + (voice === item.id ? ' on' : '');
+    b.innerHTML = '<i></i><span></span>';
+    b.querySelector('span').textContent = item.label;
+    b.addEventListener('click', () => {
+      voice = item.id;
+      try { localStorage.setItem(VOICE_KEY, voice); } catch (e) {}
+      renderVoiceList();
+      if (voice === 'off') beep();
+      else say('camera_speed', true);
+    });
+    list.appendChild(b);
+  }
+  document.getElementById('voice-note').textContent = soundOn
+    ? 'Bấm một giọng để chọn và nghe thử. Giọng đọc báo camera, chạy quá tốc độ, giới hạn tốc độ mới, hầm, cấm vượt và các bước rẽ khi dẫn đường.'
+    : 'Tiếng đang tắt nên khi chạy trang không đọc và không kêu bíp. Bấm một giọng vẫn nghe thử được.';
+}
+function openSettings(open) {
+  document.getElementById('settings').classList.toggle('hidden', !open);
+  if (open) renderVoiceList();
 }
 
 /* ============================================================
