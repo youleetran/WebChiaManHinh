@@ -802,7 +802,8 @@ const API_TRIES = 3;                  // máy chủ quá tải hay báo lỗi th
 const API_RETRY_MS = 1500;
 const MAX_AUTO_SKIPS = 3;             // tự bỏ qua tối đa bấy nhiêu video lỗi liên tiếp rồi mới báo
 const TRACK_CHANGE_DELAY_MS = 400;    // bấm chuyển bài liên tiếp thì chỉ tải bài cuối, đỡ quá tải máy chủ
-const VIDEO_MAX_HEIGHT = 480;         // nửa màn hình xe không cần nét hơn, tải nhẹ thì đỡ giật
+const VIDEO_MAX_HEIGHT = 360;         // nửa màn hình xe không cần nét hơn, tải nhẹ thì đỡ giật
+const YT_QUALITY = 'medium';          // 360p cho khung YouTube (YouTube có thể không nghe theo)
 const VIDEO_BUFFER_S = 45;            // tải trước bấy nhiêu giây để đỡ qua lúc mạng yếu
 
 /* ============================================================
@@ -4298,12 +4299,12 @@ async function playYouTube(item, token) {
     const YT = await loadYouTubeApi();
     if (token !== playToken) return;
     if (ytPlayer && ytPlayer.loadVideoById) {
-      ytPlayer.loadVideoById({ videoId, startSeconds: start });
+      ytPlayer.loadVideoById({ videoId, startSeconds: start, suggestedQuality: YT_QUALITY });
       return;
     }
     ytPlayer = new YT.Player('yt-host', {
       width: '100%', height: '100%', videoId,
-      playerVars: { autoplay: 1, playsinline: 1, rel: 0, start, origin: location.origin },
+      playerVars: { autoplay: 1, playsinline: 1, rel: 0, start, origin: location.origin, vq: YT_QUALITY },
       events: {
         onReady: e => {
           if (engine !== 'youtube') return;
@@ -4324,6 +4325,8 @@ async function playYouTube(item, token) {
             if (e.data === 2) navigator.mediaSession.playbackState = 'paused';
           }
           if (e.data === 1) { autoSkips = 0; clearPlayError(); }
+          // Xin 360p mỗi lần bắt đầu phát (đổi bài YouTube lại chọn chất lượng tự động)
+          if (e.data === 1 || e.data === 3) { try { e.target.setPlaybackQuality(YT_QUALITY); } catch (err) {} }
           // 2 = dừng, -1/5 = chưa chạy (bài mới nạp lúc màn hình tắt)
           if (engine !== 'youtube') return;
           if (e.data === 1) userPausedVideo = false;
