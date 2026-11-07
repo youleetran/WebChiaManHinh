@@ -4202,6 +4202,43 @@ let autoMuted = false;            // trang tự tắt tiếng để được t�
    Tắt màn hình iPhone thì trình phát (YouTube hoặc video Invidious) bị dừng dù bạn không bấm.
    Dừng lúc trang đang ẩn (hoặc vừa ẩn) thì coi là máy tự dừng, thử phát lại vài lần, giãn dần.
    Bạn tự bấm dừng (nút, màn hình khóa, vô lăng) thì không phát lại. */
+// Giữ trang "đang phát nhạc" như duoscreen: một thẻ <audio> phát đoạn im lặng 5 giây lặp mãi,
+// và báo iPhone đây là trang phát nhạc (audioSession = playback). Nhờ vậy khi tắt màn hình
+// iPhone không dừng trang, khung YouTube vẫn chạy và màn hình khóa vẫn có nút điều khiển.
+// iPhone chỉ cho bắt đầu phát sau một lần chạm, nên keepAlive() được gọi trong lúc bấm.
+let keepAliveEl = null;
+function silentWavUrl() {
+  const rate = 44100, seconds = 5, bytes = rate * seconds * 4;   // stereo 16 bit, toàn số 0
+  const buf = new ArrayBuffer(44 + bytes), d = new DataView(buf);
+  const w = (o, t) => { for (let i = 0; i < t.length; i++) d.setUint8(o + i, t.charCodeAt(i)); };
+  w(0, 'RIFF'); d.setUint32(4, 36 + bytes, true); w(8, 'WAVE'); w(12, 'fmt ');
+  d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 2, true);
+  d.setUint32(24, rate, true); d.setUint32(28, rate * 4, true); d.setUint16(32, 4, true); d.setUint16(34, 16, true);
+  w(36, 'data'); d.setUint32(40, bytes, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+function setPlaybackSession() {
+  if ('audioSession' in navigator) { try { navigator.audioSession.type = 'playback'; } catch (e) {} }
+}
+function keepAlive(on) {
+  if (on) {
+    setPlaybackSession();
+    if (!keepAliveEl) {
+      keepAliveEl = document.createElement('audio');
+      keepAliveEl.src = silentWavUrl();
+      keepAliveEl.loop = true;
+      keepAliveEl.preload = 'auto';
+      keepAliveEl.setAttribute('playsinline', '');
+      keepAliveEl.setAttribute('x-webkit-airplay', 'deny');
+      document.body.appendChild(keepAliveEl);
+    }
+    if (keepAliveEl.paused) keepAliveEl.play().catch(function () {});
+  } else if (keepAliveEl && !keepAliveEl.paused) {
+    keepAliveEl.pause();
+  }
+}
+setPlaybackSession();
+
 const RESUME_TRIES = 8;
 const RESUME_HIDDEN_MS = 3000;   // dừng trong chừng này sau khi trang ẩn vẫn tính là máy tự dừng
 let pageHiddenAt = 0, resumeTimer = null;
@@ -4329,10 +4366,10 @@ async function playYouTube(item, token) {
           if (e.data === 1 || e.data === 3) { try { e.target.setPlaybackQuality(YT_QUALITY); } catch (err) {} }
           // 2 = dừng, -1/5 = chưa chạy (bài mới nạp lúc màn hình tắt)
           if (engine !== 'youtube') return;
-          if (e.data === 1) userPausedVideo = false;
+          if (e.data === 1) { userPausedVideo = false; keepAlive(true); }
           if ((e.data === 2 || e.data === -1 || e.data === 5) && systemPaused()) keepPlaying();
           // Dừng lúc màn hình đang sáng là bạn bấm dừng ngay trong khung YouTube
-          else if (e.data === 2) userPausedVideo = true;
+          else if (e.data === 2) { userPausedVideo = true; keepAlive(false); }
           if (e.data === 0 && engine === 'youtube') { saveState(); changeTrack(1); }
         },
         onError: () => {
@@ -4358,6 +4395,7 @@ async function playSong(item, failCounts) {
   counts.forEach((n, b) => { if (n >= VIDEO_TRIES_PER_SERVER) skip.add(b); });
   stopPlayer();
   userPausedVideo = false;   // chọn bài mới là muốn nghe
+  keepAlive(true);
   if (videoSource === 'youtube') return playYouTube(item, token);
   try {
     const { data: s, base } = await invidiousFetch('/api/v1/videos/' + videoId, skip, () => token === playToken);
@@ -4485,8 +4523,8 @@ if ('mediaSession' in navigator) {
   const mediaActions = {
     nexttrack: () => changeTrack(1),
     previoustrack: () => changeTrack(-1),
-    play: () => { userPausedVideo = false; media.play(); },
-    pause: () => { userPausedVideo = true; media.pause(); },
+    play: () => { userPausedVideo = false; keepAlive(true); media.play(); },
+    pause: () => { userPausedVideo = true; keepAlive(false); media.pause(); },
     // Để trống thì iPhone hiện nút chuyển bài thay vì nút tua
     seekbackward: null,
     seekforward: null
@@ -4552,14 +4590,15 @@ videoEl.addEventListener('pause', saveState);
 videoEl.addEventListener('pause', () => {
   if (engine !== 'invidious' || videoEl.ended || !currentVideoId) return;
   if (systemPaused()) keepPlaying();
-  else userPausedVideo = true;   // bấm dừng trên trình phát lúc màn hình sáng
+  else { userPausedVideo = true; keepAlive(false); }   // bấm dừng trên trình phát lúc màn hình sáng
 });
-videoEl.addEventListener('play', () => { if (engine === 'invidious') userPausedVideo = false; });
+videoEl.addEventListener('play', () => { if (engine === 'invidious') { userPausedVideo = false; keepAlive(true); } });
 
 document.getElementById('btn-prev').addEventListener('click', () => changeTrack(-1));
 document.getElementById('btn-next').addEventListener('click', () => changeTrack(1));
 document.getElementById('btn-playpause').addEventListener('click', () => {
   userPausedVideo = !media.paused;
+  keepAlive(!userPausedVideo);
   if (media.paused) media.play();
   else media.pause();
 });
@@ -4568,6 +4607,7 @@ document.addEventListener('pointerdown', function unlockVideo(e) {
   if (e.target.closest && e.target.closest('#btn-playpause, #btn-mute')) return;
   try {
     if (autoMuted && !voiceMutedVideo) { media.muted = false; autoMuted = false; }
+    if (currentVideoId && !userPausedVideo) keepAlive(true);
     if (currentVideoId && !userPausedVideo && media.paused) media.play();
   } catch (err) {}
 }, true);
