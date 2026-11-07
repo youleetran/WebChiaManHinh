@@ -198,15 +198,17 @@
   #sign-type-list.off { opacity: 0.5; }
   #voice-list.off { opacity: 0.5; }
 
-  /* Lúc đang dẫn đường: khung rẽ rộng tới sát bảng tốc độ, thanh giờ tới ở dưới */
-  #map-pane.nav #cross-road { width: calc(100% - 140px); height: 52px; }
-  #map-pane.nav #cross-road > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1; }
-  #map-pane.nav #cross-road-dist { flex: none; font-size: 22px; }
-  #map-pane.nav #cross-road-name { font-size: 16px; max-width: none; min-width: 0; }
   /* Đang dẫn đường chỉ giữ nút về xe, đặt trên thanh giờ tới */
   #map-pane.nav #map-side { bottom: 60px; }
   #map-pane.nav #btn-search, #map-pane.nav #btn-menu { display: none; }
   #map-pane.nav #gps-status { bottom: 58px; }
+  /* Giới hạn tốc độ tiếp theo: thanh ở dưới, tên đường đẩy lên trên nó */
+  #next-limit { position: absolute; z-index: 1000; left: 54px; bottom: 16px; display: block; pointer-events: none; }
+  #next-limit.hidden { display: none; }
+  #map-pane.nav #next-limit { bottom: 60px; }
+  #map-pane.mirror #next-limit { visibility: hidden; }
+  #map-pane.next-limit #gps-status { bottom: 66px; }
+  #map-pane.nav.next-limit #gps-status { bottom: 104px; }
   #nav-bar {
     position: absolute; z-index: 1000; left: 10px; right: 52px; bottom: 16px; height: 36px; box-sizing: border-box;
     display: flex; align-items: center; padding: 0 2px 0 12px; background: #0a0a0c; color: #fff; border-radius: 10px;
@@ -265,27 +267,21 @@
   #speed-glow.hidden { display: none; }
 
   /* Đường sắp cắt qua, góc trên bên trái */
-  #cross-road {
-    position: absolute; z-index: 1000; top: 10px; left: 10px; width: 176px; height: 56px; box-sizing: border-box;
-    display: flex; align-items: center; gap: 8px; padding: 4px 8px;
-    background: rgba(14,17,22,0.92); border-radius: 10px; color: #fff;
-  }
+  /* Khung hướng dẫn: vẽ trong canvas (drawGuideCard) để lớp video lúc khóa máy chỉ cần chép lại */
+  #cross-road { position: absolute; z-index: 1000; top: 10px; left: 10px; display: block; pointer-events: none; }
   #cross-road.hidden { display: none; }
   #map-pane.mirror #cross-road { visibility: hidden; }
-  #cross-road svg { flex: none; width: 26px; height: 40px; }
-  #cross-road-dist { font-size: 19px; font-weight: 800; line-height: 1.1; }
-  #cross-road-name { font-size: 13px; line-height: 1.15; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 126px; }
 
   /* Các hướng đi ở ngã phía trước, ngay dưới tên đường sắp cắt qua */
-  #junction { position: absolute; z-index: 1000; top: 70px; left: 10px; display: block; height: 40px; }
-  #junction.hidden { display: none; }
-  #map-pane.mirror #junction { visibility: hidden; }
+  #junction { position: absolute; z-index: 1000; top: 70px; left: 10px; display: block; }
+  #junction.hidden, #lane-mini.hidden { display: none; }
+  #map-pane.mirror #junction, #map-pane.mirror #lane-mini { visibility: hidden; }
+  #lane-mini { pointer-events: none; }
   @keyframes speed-glow { 50% { opacity: 0.4; } }
 
   /* Cảnh báo sắp tới camera */
   #cam-warning {
-    position: absolute; z-index: 1001; top: 68px; left: 60%; white-space: nowrap;
-    transform: translateX(-50%);
+    position: absolute; z-index: 1001; top: 68px; right: 10px; white-space: nowrap;
     display: flex; align-items: center; gap: 8px;
     background: #f59e0b; color: #111; font-weight: 800; font-size: 18px;
     padding: 3px 12px 3px 3px; border-radius: 10px;
@@ -439,15 +435,11 @@
 
     <div id="speed-glow" class="hidden"></div>
 
-    <div id="cross-road" class="hidden">
-      <svg viewBox="0 0 26 40"><path d="M13 1 L25 17 H17 V39 H9 V17 H1 Z" fill="#4d9bff"/></svg>
-      <div>
-        <div id="cross-road-dist"></div>
-        <div id="cross-road-name"></div>
-      </div>
-    </div>
+    <canvas id="cross-road" class="hidden" width="2" height="2"></canvas>
 
     <canvas id="junction" class="hidden" width="2" height="80"></canvas>
+    <canvas id="lane-mini" class="hidden" width="2" height="2"></canvas>
+    <canvas id="next-limit" class="hidden" width="2" height="2"></canvas>
 
     <div id="speed-overlay">
       <div class="speed-card" id="speed-limit-box">
@@ -529,6 +521,11 @@
             <span class="settings-text"><b>Tùy chỉnh cảnh báo</b><span id="alerts-summary"></span></span>
             <span class="settings-arrow">›</span>
           </button>
+          <button type="button" class="settings-row" data-page="settings-theme">
+            <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg></span>
+            <span class="settings-text"><b>Màu bản đồ</b><span id="theme-summary"></span></span>
+            <span class="settings-arrow">›</span>
+          </button>
           <button type="button" class="settings-row" data-page="settings-map">
             <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 3.5l9 15.5H3z"/><path d="M12 10v4" stroke-linecap="round"/><circle cx="12" cy="16.6" r="0.6" fill="currentColor"/></svg></span>
             <span class="settings-text"><b>Biển báo trên bản đồ</b><span id="map-show-summary"></span></span>
@@ -549,6 +546,10 @@
       <div class="settings-page hidden" id="settings-alerts">
         <div class="settings-note" style="margin: 0 4px 8px">Chọn câu nào được đọc. Bật một mục thì nghe thử câu đó.</div>
         <div id="alert-list"></div>
+      </div>
+      <div class="settings-page hidden" id="settings-theme">
+        <div id="theme-list"></div>
+        <div class="settings-note" id="theme-note"></div>
       </div>
       <div class="settings-page hidden" id="settings-map">
         <div class="settings-note" style="margin: 0 4px 8px">Chỉ ẩn hay hiện biểu tượng trên bản đồ. Cảnh báo và giọng đọc vẫn chạy như cũ.</div>
@@ -685,7 +686,7 @@ const VOICE_ALERTS_KEY = 'voiceAlertsOff';   // danh sách loại đang tắt
 // Lớp biểu tượng trên bản đồ có thể ẩn trong Cài đặt → Biển báo trên bản đồ
 const MAP_SHOW_LAYERS = [
   { id: 'sign', label: 'Biển báo', note: 'Ngã tư, đường cong, trường học, cấm vượt…' },
-  { id: 'camera', label: 'Camera', note: 'Ẩn trên bản đồ vẫn có khung vàng và giọng đọc' },
+  { id: 'camera', label: 'Camera', note: 'Chỉ hiện camera phía trước trong 500 m. Ẩn vẫn có khung vàng, giọng đọc và biểu tượng lớn' },
   { id: 'fuel', label: 'Cây xăng' }
 ];
 const MAP_SHOW_KEY = 'mapShow';
@@ -708,7 +709,9 @@ const VOICE_TURNS = {
   'slight left': 'turn_slight_left', 'slight right': 'turn_slight_right', straight: 'turn_straight', uturn: 'turn_uturn'
 };
 const CAM_WARN_M = 500;        // camera phía trước trong khoảng này thì nhấp nháy cảnh báo
-const CAM_WARN_SIDE_M = 60;    // camera lệch sang ngang hơn chừng này là ở đường khác, không cảnh báo
+const CAM_WARN_SIDE_M = 30;    // chưa biết xe đang ở đường nào: camera lệch sang ngang hơn chừng này thì không cảnh báo
+const CAM_ROAD_M = 25;         // camera, biển cách đường xe đang chạy quá chừng này là của đường khác
+const CAM_OTHER_ROAD_M = 4;    // camera gần một đường khác hơn đường đang chạy quá chừng này là của đường kia
 const CROSS_ROAD_M = 500;      // báo đường sắp cắt qua trong khoảng này
 const CROSS_ROAD_MIN_M = 15;   // gần hơn chừng này coi như đã tới ngã giao, báo đường kế tiếp
 const CROSS_JOIN_M = 10;       // đầu một đường cách đường đang chạy chừng này thì coi là ngã ba
@@ -788,6 +791,64 @@ const roadLabel = ['let', 'name', ['coalesce', ['get', 'name'], ['get', 'ref'], 
     ['==', ['slice', ['var', 'name'], 0, 6], 'Đường '], ['slice', ['var', 'name'], 6],
     ['==', ['slice', ['var', 'name'], 0, 4], 'Phố '], ['slice', ['var', 'name'], 4],
     ['var', 'name']]];
+// Hai bộ màu: sáng (ban ngày, dễ nhìn khi nắng) và tối (ban đêm, đỡ chói)
+const MAP_THEMES = {
+  day: {
+    background: '#eef0f3', park: '#d5ebcc', water: '#a8d4f5',
+    roadEdge: '#c3c9d2', roadMain: '#ffe8a3', roadMinor: '#ffffff',
+    roadText: '#39414d', roadTextMain: '#5a4313', halo: '#ffffff',
+    placeText: '#6b5634', fuelText: '#1565c0', pinText: '#111111',
+    routeEdge: '#0d4fb8', route: '#1a73e8'
+  },
+  night: {
+    background: '#242f3e', park: '#263c3f', water: '#17263c',
+    roadEdge: '#1a2230', roadMain: '#8a7b5e', roadMinor: '#4a5568',
+    roadText: '#e8ecf2', roadTextMain: '#f5d9a8', halo: '#17202c',
+    placeText: '#d5b98a', fuelText: '#9ccfff', pinText: '#ffffff',
+    routeEdge: '#0b6fa8', route: '#2fd2ff'
+  }
+};
+const MAP_THEME_KEY = 'mapTheme';   // 'auto' | 'day' | 'night'
+const MAP_THEME_OPTIONS = [
+  { id: 'auto', label: 'Tự động', note: 'Sáng ban ngày, tối sau khi mặt trời lặn' },
+  { id: 'day', label: 'Luôn sáng' },
+  { id: 'night', label: 'Luôn tối' }
+];
+let mapThemePref = 'auto';
+try {
+  const saved = localStorage.getItem(MAP_THEME_KEY);
+  if (MAP_THEME_OPTIONS.some(o => o.id === saved)) mapThemePref = saved;
+} catch (e) {}
+
+// Giờ mặt trời mọc, lặn (phút UTC) theo công thức của NOAA, đủ chính xác cho việc đổi màu
+function sunTimesUTC(date, lat, lon) {
+  const start = Date.UTC(date.getUTCFullYear(), 0, 1);
+  const g = 2 * Math.PI / 365 * Math.floor((date.getTime() - start) / 86400000);
+  const eq = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+  const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g)
+    + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+  const rad = Math.PI / 180;
+  const cosHa = Math.cos(90.833 * rad) / (Math.cos(lat * rad) * Math.cos(decl)) - Math.tan(lat * rad) * Math.tan(decl);
+  const ha = Math.acos(Math.max(-1, Math.min(1, cosHa))) / rad;
+  return [720 - 4 * (lon + ha) - eq, 720 - 4 * (lon - ha) - eq];
+}
+function isDaytime(lat, lon) {
+  const now = new Date();
+  const [rise, set] = sunTimesUTC(now, lat, lon);
+  const minutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const sinceRise = ((minutes - rise) % 1440 + 1440) % 1440;
+  const dayLength = ((set - rise) % 1440 + 1440) % 1440;
+  return sinceRise < dayLength;
+}
+// pos: vị trí xe nếu đã có GPS
+function currentThemeName(pos) {
+  if (mapThemePref !== 'auto') return mapThemePref;
+  if (!pos) pos = { lat: DEFAULT_CENTER[1], lon: DEFAULT_CENTER[0] };
+  return isDaytime(pos.lat, pos.lon) ? 'day' : 'night';
+}
+let mapThemeName = currentThemeName();
+const T = MAP_THEMES[mapThemeName];   // màu lúc dựng bản đồ, sau đó đổi bằng applyMapTheme
+
 const NAV_MAP_STYLE = {
   version: 8,
   glyphs: MAP_FONTS_URL,
@@ -795,28 +856,24 @@ const NAV_MAP_STYLE = {
     osm: { type: 'vector', url: MAP_TILES_URL },
     'current-road': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
     signs: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+    'cam-active': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+    'limit-next': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
     'search-place': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
     'nav-route': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
   },
   layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#242f3e' } },
-    { id: 'park', type: 'fill', source: 'osm', 'source-layer': 'park', paint: { 'fill-color': '#263c3f' } },
-    { id: 'water', type: 'fill', source: 'osm', 'source-layer': 'water', paint: { 'fill-color': '#17263c' } },
+    { id: 'background', type: 'background', paint: { 'background-color': T.background } },
+    { id: 'park', type: 'fill', source: 'osm', 'source-layer': 'park', paint: { 'fill-color': T.park } },
+    { id: 'water', type: 'fill', source: 'osm', 'source-layer': 'water', paint: { 'fill-color': T.water } },
     { id: 'road-edge', type: 'line', source: 'osm', 'source-layer': 'transportation',
       filter: ['in', ['get', 'class'], ['literal', ROAD_CLASSES]],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#1a2230', 'line-width': roadWidth(1.35) } },
+      paint: { 'line-color': T.roadEdge, 'line-width': roadWidth(1.35) } },
     { id: 'road', type: 'line', source: 'osm', 'source-layer': 'transportation',
       filter: ['in', ['get', 'class'], ['literal', ROAD_CLASSES]],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': ['case', isMainRoad, '#8a7b5e', '#4a5568'], 'line-width': roadWidth(1) } },
-    { id: 'building', type: 'fill-extrusion', source: 'osm', 'source-layer': 'building', minzoom: 15,
-      paint: {
-        'fill-extrusion-color': '#343f50',
-        'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6],
-        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-        'fill-extrusion-opacity': 0.8
-      } },
+      paint: { 'line-color': ['case', isMainRoad, T.roadMain, T.roadMinor], 'line-width': roadWidth(1) } },
+    // Không vẽ nhà (trước đây là nhà 3D): bản đồ gọn, dễ nhìn và nhẹ máy hơn
     { id: 'current-road-edge', type: 'line', source: 'current-road',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': '#1a56c4', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 5, 16, 10, 18, 18] } },
@@ -825,10 +882,10 @@ const NAV_MAP_STYLE = {
       paint: { 'line-color': '#4d9bff', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 3, 16, 7, 18, 14] } },
     { id: 'nav-route-edge', type: 'line', source: 'nav-route',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#0b6fa8', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 5, 16, 12, 18, 20] } },
+      paint: { 'line-color': T.routeEdge, 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 5, 16, 12, 18, 20] } },
     { id: 'nav-route', type: 'line', source: 'nav-route',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#2fd2ff', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 16, 8, 18, 15] } },
+      paint: { 'line-color': T.route, 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 16, 8, 18, 15] } },
     { id: 'nav-route-arrow', type: 'symbol', source: 'nav-route', minzoom: 14,
       layout: {
         'symbol-placement': 'line', 'symbol-spacing': 90,
@@ -846,8 +903,8 @@ const NAV_MAP_STYLE = {
         'symbol-spacing': 160
       },
       paint: {
-        'text-color': ['case', isMainRoad, '#f5d9a8', '#e8ecf2'],
-        'text-halo-color': '#17202c', 'text-halo-width': 2
+        'text-color': ['case', isMainRoad, T.roadTextMain, T.roadText],
+        'text-halo-color': T.halo, 'text-halo-width': 2
       } },
     // Cây xăng lấy thẳng từ nền bản đồ OpenFreeMap (OpenStreetMap). Tên hiện khi đủ chỗ, không che tên đường
     { id: 'fuel', type: 'symbol', source: 'osm', 'source-layer': 'poi', minzoom: 14,
@@ -864,7 +921,7 @@ const NAV_MAP_STYLE = {
         'text-offset': [0, 1.3],
         'text-optional': true
       },
-      paint: { 'text-color': '#9ccfff', 'text-halo-color': '#17202c', 'text-halo-width': 1.5 } },
+      paint: { 'text-color': T.fuelText, 'text-halo-color': T.halo, 'text-halo-width': 1.5 } },
     // Biển báo: nhiều biển sát nhau thì chỉ hiện biển không bị che, đỡ rối
     { id: 'sign', type: 'symbol', source: 'signs', minzoom: 15,
       filter: ['!', ['get', 'isCamera']],
@@ -875,12 +932,30 @@ const NAV_MAP_STYLE = {
         'icon-pitch-alignment': 'viewport',
         'icon-rotation-alignment': 'viewport'
       } },
-    // Camera luôn hiện, vẽ trên biển báo
+    // Camera chỉ hiện khi ở phía trước, gần xe (showCamCallout đổi bộ lọc này), vẽ trên biển báo
     { id: 'camera', type: 'symbol', source: 'signs', minzoom: 14,
-      filter: ['get', 'isCamera'],
+      filter: ['in', ['get', 'key'], ['literal', []]],
       layout: {
         'icon-image': ['get', 'icon'],
         'icon-size': ['interpolate', ['linear'], ['zoom'], 14, 0.65, 16, 1, 18, 1.25],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-pitch-alignment': 'viewport',
+        'icon-rotation-alignment': 'viewport'
+      } },
+    // Camera sắp tới: chấm đỏ đúng chỗ camera, nối lên biểu tượng camera lớn bên cạnh (xem drawCamCallout)
+    { id: 'cam-active', type: 'symbol', source: 'cam-active',
+      layout: {
+        'icon-image': ['concat', 'callout|', ['get', 'icon']],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-pitch-alignment': 'viewport',
+        'icon-rotation-alignment': 'viewport'
+      } },
+    // Giới hạn tốc độ tiếp theo: chấm đỏ chỗ đổi giới hạn, nối lên biển tốc độ (xem updateNextLimit)
+    { id: 'limit-next', type: 'symbol', source: 'limit-next',
+      layout: {
+        'icon-image': ['concat', 'callout|limit-', ['to-string', ['get', 'limit']]],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-pitch-alignment': 'viewport',
@@ -902,10 +977,10 @@ const NAV_MAP_STYLE = {
         'text-offset': [0, 0.3],
         'text-optional': true
       },
-      paint: { 'text-color': '#ffffff', 'text-halo-color': '#17202c', 'text-halo-width': 2 } },
+      paint: { 'text-color': T.pinText, 'text-halo-color': T.halo, 'text-halo-width': 2 } },
     { id: 'place-name', type: 'symbol', source: 'osm', 'source-layer': 'place', maxzoom: 14,
       layout: { 'text-field': ['coalesce', ['get', 'name'], ''], 'text-font': ['Noto Sans Regular'], 'text-size': 14 },
-      paint: { 'text-color': '#d5b98a', 'text-halo-color': '#17202c', 'text-halo-width': 1.5 } }
+      paint: { 'text-color': T.placeText, 'text-halo-color': T.halo, 'text-halo-width': 1.5 } }
   ]
 };
 
@@ -938,6 +1013,7 @@ try {
 }
 
 let navArrow = null;        // mũi tên vị trí hiện tại (GPS)
+let laneMiniMarker = null;  // ô làn nhỏ cạnh mũi tên xe, xem showLaneGuide
 let carPos = null;          // vị trí và hướng mới nhất từ GPS
 let manualMarker = null;    // vị trí đặt tay
 let follow = true;          // tự động bám theo GPS
@@ -1167,6 +1243,7 @@ function createNavArrow() {
 }
 function placeArrow(lon, lat, rotation) {
   navArrow.setLngLat([lon, lat]).setRotation(rotation);
+  if (laneMiniMarker) laneMiniMarker.setLngLat([lon, lat]);
 }
 
 // Đưa camera về sau xe: nghiêng, xoay theo hướng chạy, xe nằm phía dưới màn hình
@@ -1273,6 +1350,12 @@ function drawMirrorArrow(ctx) {
   ctx.strokeStyle = '#fff';
   ctx.stroke();
   ctx.restore();
+  // Ô làn nhỏ cạnh xe, cùng chỗ với #lane-mini (neo bên trái, lệch 34 px)
+  const mini = document.getElementById('lane-mini');
+  if (laneMiniMarker && !mini.classList.contains('hidden')) {
+    const w = mini.width / 2, h = mini.height / 2;
+    ctx.drawImage(mini, p.x + 34, p.y - h / 2, w, h);
+  }
 }
 // Viền đỏ khi quá tốc độ, cùng nhịp với #speed-glow: sáng rõ rồi mờ đi trong 1 giây
 function drawMirrorSpeedGlow(ctx, width, height) {
@@ -1334,40 +1417,12 @@ function drawMirrorOverlay(ctx, width, height) {
   ctx.fillStyle = '#fff';
   ctx.font = '700 9px Arial, sans-serif';
   ctx.fillText('km/h', speedX + 26, top + 38);
-  // Đường sắp cắt qua, cùng vị trí với #cross-road
-  if (!document.getElementById('cross-road').classList.contains('hidden')) {
-    ctx.beginPath();
-    ctx.roundRect(10, 10, navMode ? width - 140 : 176, navMode ? 52 : 56, 10);
-    ctx.fillStyle = 'rgba(14,17,22,0.92)';
-    ctx.fill();
-    // Mũi tên xoay theo hướng rẽ khi đang dẫn đường, góc lưu ở #cross-road
-    ctx.save();
-    ctx.translate(31, navMode ? 36 : 38);
-    const crossAngle = Number(document.getElementById('cross-road').dataset.angle || 0);
-    ctx.rotate(crossAngle * Math.PI / 180);
-    if (crossAngle) ctx.scale(0.85, 0.85);
-    ctx.fillStyle = '#4d9bff';
-    ctx.fill(new Path2D('M0 -20 L12 -4 H4 V18 H-4 V-4 H-12 Z'));
-    ctx.restore();
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#fff';
-    ctx.font = '800 ' + (navMode ? 22 : 19) + 'px Arial, sans-serif';
-    const crossDist = document.getElementById('cross-road-dist').textContent;
-    ctx.fillText(crossDist, 52, navMode ? 37 : 28);
-    const nameX = navMode ? 52 + ctx.measureText(crossDist).width + 8 : 52;
-    const nameW = navMode ? width - 130 - 8 - nameX : 126;
-    let crossName = document.getElementById('cross-road-name').textContent;
-    ctx.font = navMode ? '16px Arial, sans-serif' : '13px Arial, sans-serif';
-    if (ctx.measureText(crossName).width > nameW) {
-      while (crossName.length > 1 && ctx.measureText(crossName + '…').width > nameW) crossName = crossName.slice(0, -1);
-      crossName += '…';
-    }
-    ctx.fillText(crossName, nameX, navMode ? 37 : 49);
-    ctx.textAlign = 'center';
-  }
+  // Khung hướng dẫn, cùng vị trí với #cross-road (đã vẽ sẵn trong canvas)
+  const card = document.getElementById('cross-road');
+  if (!card.classList.contains('hidden')) ctx.drawImage(card, 10, 10, card.width / 2, card.height / 2);
   // Các hướng đi ở ngã phía trước, cùng vị trí với #junction
   const junction = document.getElementById('junction');
-  if (!junction.classList.contains('hidden')) ctx.drawImage(junction, 10, 70, junction.width / 2, junction.height / 2);
+  if (!junction.classList.contains('hidden')) ctx.drawImage(junction, 10, parseFloat(junction.style.top) || 70, junction.width / 2, junction.height / 2);
   // Cảnh báo sắp tới camera, cùng vị trí và nhịp nháy với #cam-warning.
   // Nháy sáng rồi mờ chứ không tắt hẳn: lớp video cập nhật thưa nên có thể lỡ mất lúc sáng.
   if (!document.getElementById('cam-warning').classList.contains('hidden')) {
@@ -1377,7 +1432,7 @@ function drawMirrorOverlay(ctx, width, height) {
     ctx.font = '800 18px Arial, sans-serif';
     const textW = ctx.measureText(text).width;
     const w = textW + 55;
-    const x = width * 0.6 - w / 2;
+    const x = width - 10 - w;   // bên phải, dưới bảng tốc độ, như #cam-warning
     ctx.beginPath();
     ctx.roundRect(x, camTop, w, 38, 10);
     ctx.fillStyle = '#f59e0b';
@@ -1396,13 +1451,17 @@ function drawMirrorOverlay(ctx, width, height) {
     name += '…';
   }
   const w = ctx.measureText(name).width + 28;
-  const y = height - (navMode ? 58 : 22) - 28;
+  const nextBar = document.getElementById('next-limit');
+  const nextShown = !nextBar.classList.contains('hidden');
+  const y = height - (navMode ? 58 : 22) - (nextShown ? (navMode ? 46 : 44) : 0) - 28;
   ctx.beginPath();
   ctx.roundRect(width / 2 - w / 2, y, w, 28, 14);
   ctx.fillStyle = '#0a0a0c';
   ctx.fill();
   ctx.fillStyle = '#2fe0e6';
   ctx.fillText(name, width / 2, y + 15);
+  // Giới hạn tốc độ tiếp theo, cùng vị trí với #next-limit
+  if (nextShown) ctx.drawImage(nextBar, 54, height - (navMode ? 60 : 16) - nextBar.height / 2, nextBar.width / 2, nextBar.height / 2);
   // Thanh giờ tới, cùng vị trí với #nav-bar
   if (navMode && !document.getElementById('nav-bar').classList.contains('hidden')) {
     const barW = width - 62, barY = height - 16 - 36;
@@ -1541,6 +1600,7 @@ async function loadTile(key) {
     const records = (r.status === 404) ? [] : await r.json();
     roadTiles.set(key, records.map((rec, i) => decodeWay(rec, i, key)));
     tileRetryAt.delete(key);
+    nearestWayCache.clear();
     // Giữ bộ nhớ gọn: bỏ các ô cũ không còn ở gần
     const near = lastPoint ? tilesNear(lastPoint.lat, lastPoint.lon) : [];
     for (const k of roadTiles.keys()) {
@@ -1662,7 +1722,77 @@ function roadAhead(match, maxM) {
     seen.add(next.other.id);
     path.push(...next.pts);
   }
+  path.ways = seen;   // các đoạn đường nằm trong path
   return path;
+}
+
+/* ---------- Đường phía trước cho camera và biển báo ----------
+   Chỉ báo camera, biển nằm trên chính con đường xe đang chạy và ở phía trước theo con đường đó.
+   Hướng ghi trong dữ liệu camera không khớp với hướng đường nên không dùng được để lọc. */
+function aheadOnRoad(match) {
+  if (!match) return null;
+  const path = roadAhead(match, CAM_WARN_M);
+  const cosLat = Math.cos(match.lat * Math.PI / 180);
+  const toXY = (lat, lon) => [(lon - match.lon) * 111320 * cosLat, (lat - match.lat) * 111320];
+  return { line: path.map(p => toXY(p[0], p[1])), ways: path.ways, toXY };
+}
+
+// Điểm nằm ở đâu so với đường phía trước: cách xe bao xa dọc theo đường (along), lệch ra ngang bao nhiêu (side)
+function placeOnAhead(ahead, lat, lon) {
+  const [px, py] = ahead.toXY(lat, lon);
+  const line = ahead.line;
+  let best = null, walked = 0;
+  for (let i = 0; i + 1 < line.length; i++) {
+    const [ax, ay] = line[i], [bx, by] = line[i + 1];
+    const sx = bx - ax, sy = by - ay, len2 = sx * sx + sy * sy;
+    if (!len2) continue;
+    const len = Math.sqrt(len2);
+    const u = Math.max(0, Math.min(1, ((px - ax) * sx + (py - ay) * sy) / len2));
+    const side = Math.hypot(ax + u * sx - px, ay + u * sy - py);
+    if (!best || side < best.side) best = { side, along: walked + u * len };
+    walked += len;
+  }
+  return best;
+}
+
+// Đường gần điểm này nhất (trong khoảng CAM_ROAD_M), để biết camera thuộc đường nào.
+// Camera, biển không đổi chỗ nên nhớ lại kết quả; tải xong ô đường mới thì tính lại.
+const nearestWayCache = new Map();
+function nearestWay(lat, lon) {
+  const cosLat = Math.cos(lat * Math.PI / 180);
+  let best = null;
+  for (const key of tilesNear(lat, lon)) {
+    for (const way of roadTiles.get(key) || []) {
+      for (let i = 0; i + 1 < way.points.length; i++) {
+        const a = way.points[i], b = way.points[i + 1];
+        const ax = (a[1] - lon) * 111320 * cosLat, ay = (a[0] - lat) * 111320;
+        const bx = (b[1] - lon) * 111320 * cosLat, by = (b[0] - lat) * 111320;
+        const sx = bx - ax, sy = by - ay, len2 = sx * sx + sy * sy;
+        if (!len2) continue;
+        const u = Math.max(0, Math.min(1, -(ax * sx + ay * sy) / len2));
+        const dist = Math.hypot(ax + u * sx, ay + u * sy);
+        if (dist <= CAM_ROAD_M && (!best || dist < best.dist)) best = { way, dist };
+      }
+    }
+  }
+  return best;
+}
+
+// Điểm có nằm trên đường xe đang chạy, phía trước trong khoảng maxM không. Trả về khoảng cách dọc đường.
+function aheadDistance(ahead, lat, lon, maxM) {
+  const place = placeOnAhead(ahead, lat, lon);
+  if (!place || place.side > CAM_ROAD_M || place.along <= 0 || place.along > maxM) return null;
+  // Gần một đường khác hơn hẳn (chiều bên kia dải phân cách, đường cắt ngang, đường song song) thì là của đường đó
+  const key = lat + ',' + lon;
+  let other = nearestWayCache.get(key);
+  if (other === undefined) {
+    other = nearestWay(lat, lon);
+    other = other ? { id: other.way.id, dist: other.dist } : null;
+    if (nearestWayCache.size > 2000) nearestWayCache.clear();
+    nearestWayCache.set(key, other);
+  }
+  if (other && !ahead.ways.has(other.id) && other.dist + CAM_OTHER_ROAD_M < place.side) return null;
+  return place.along;
 }
 
 function nextCrossRoad(match) {
@@ -1737,71 +1867,358 @@ function nextCrossRoad(match) {
   return { dist: first.dist, name: first.name, exits };
 }
 
-// Vẽ khung mũi tên giống bảng hướng dẫn làn, mỗi mũi tên chỉ đúng góc của lối đi
-const JUNCTION_CELL = 30;
+/* ---------- Khung làn đường và hình ngã phía trước (kiểu Vietmap Live) ----------
+   info = {
+     lanes: [{ turns: [góc...], on: true/false/null }]  mỗi làn một ô, on = làn nên đi (null: chưa biết, vẽ trắng)
+     exits: [góc...]   các lối ra ở ngã, để vẽ hình ngã
+     choose: góc | null   lối sẽ đi khi dẫn đường, vẽ mũi tên vàng
+   }
+   Góc tính theo độ so với hướng đang chạy: 0 đi thẳng, âm bên trái, dương bên phải.
+   Vẽ hết vào canvas #junction để lớp video lúc khóa máy chỉ cần chép lại. */
+const JUNCTION_W = 176;          // rộng bằng khung #cross-road
+const JUNCTION_LANE_H = 40;
+const JUNCTION_PIC_H = 92;
+const JUNCTION_LANE_CELL = 32;
+const LANE_MINI_CELL = 22;
+const LANE_ON = '#3d9bff', LANE_OFF = '#6b7682', LANE_PLAIN = '#fff';
+
+// Mũi tên một làn: thân đi lên từ dưới, tới giữa thì tách theo từng hướng của làn
+function drawLaneArrows(ctx, x, bottom, size, turns, color) {
+  const midY = bottom - size * 0.42, armLen = size * 0.5;
+  ctx.strokeStyle = ctx.fillStyle = color;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(2, size * 0.13);
+  ctx.beginPath();
+  ctx.moveTo(x, bottom);
+  ctx.lineTo(x, midY);
+  ctx.stroke();
+  const head = size * 0.22;
+  for (const turn of turns) {
+    const rad = Math.max(-150, Math.min(150, turn)) * Math.PI / 180;
+    const tipX = x + Math.sin(rad) * armLen, tipY = midY - Math.cos(rad) * armLen;
+    ctx.beginPath();
+    ctx.moveTo(x, midY);
+    ctx.lineTo(tipX, tipY);
+    ctx.stroke();
+    ctx.beginPath();
+    for (const [side, back] of [[0, -head * 0.5], [head, head], [-head, head]]) {
+      ctx.lineTo(tipX + Math.sin(rad) * -back + Math.cos(rad) * side, tipY + Math.cos(rad) * back + Math.sin(rad) * side);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// Hàng làn đường: các ô cách nhau bằng vạch đứt
+function drawLaneRow(ctx, x, y, w, h, lanes, cellMax) {
+  const cell = Math.min(cellMax, w / lanes.length);
+  const left = x + (w - cell * lanes.length) / 2;
+  lanes.forEach((lane, i) => {
+    if (i) {
+      ctx.save();
+      ctx.setLineDash([2, 3]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(left + cell * i, y + h * 0.15);
+      ctx.lineTo(left + cell * i, y + h * 0.85);
+      ctx.stroke();
+      ctx.restore();
+    }
+    const color = lane.on === true ? LANE_ON : lane.on === false ? LANE_OFF : LANE_PLAIN;
+    drawLaneArrows(ctx, left + cell * (i + 0.5), y + h * 0.84, Math.min(h * 0.75, cell * 0.95), lane.turns, color);
+  });
+}
+
+// Hình ngã nhìn từ sau xe: đường chính đi lên, tới chỗ ngã thì tách ra các lối; lối sẽ đi có mũi tên vàng
+function drawJunctionPicture(ctx, x, y, w, h, info) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 6);
+  ctx.clip();
+  const horizon = y + h * 0.3;
+  let g = ctx.createLinearGradient(0, y, 0, horizon);
+  g.addColorStop(0, '#6f8fae');
+  g.addColorStop(1, '#c9d6e2');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, horizon - y);
+  g = ctx.createLinearGradient(0, horizon, 0, y + h);
+  g.addColorStop(0, '#7f9a63');
+  g.addColorStop(1, '#55703f');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, horizon, w, y + h - horizon);
+
+  const cx = x + w / 2, forkY = y + h * 0.58, bottom = y + h;
+  const baseHalf = w * 0.3, forkHalf = w * 0.14;
+  // Điểm trên lối ra: t = 0 ở ngã, 1 ở cuối lối
+  const exitPoint = (turn, t) => {
+    const rad = Math.max(-120, Math.min(120, turn)) * Math.PI / 180;
+    return [cx + Math.sin(rad) * w * 0.62 * t, forkY - Math.cos(rad) * (forkY - horizon) * t - Math.abs(Math.sin(rad)) * h * 0.05 * t];
+  };
+  const road = '#5d6268';
+  const exits = info.exits.length ? info.exits : [0];
+  for (const turn of exits) {
+    const rad = Math.max(-120, Math.min(120, turn)) * Math.PI / 180;
+    const [ex, ey] = exitPoint(turn, 1);
+    const endHalf = forkHalf * (0.25 + 0.5 * Math.abs(Math.sin(rad)));
+    const nx = Math.cos(rad), ny = Math.sin(rad);   // vuông góc với lối
+    ctx.beginPath();
+    ctx.moveTo(cx - forkHalf * nx, forkY - forkHalf * ny * 0.4);
+    ctx.lineTo(ex - endHalf * nx, ey - endHalf * ny);
+    ctx.lineTo(ex + endHalf * nx, ey + endHalf * ny);
+    ctx.lineTo(cx + forkHalf * nx, forkY + forkHalf * ny * 0.4);
+    ctx.closePath();
+    ctx.fillStyle = road;
+    ctx.fill();
+  }
+  // Đường chính từ dưới lên tới ngã
+  ctx.beginPath();
+  ctx.moveTo(cx - baseHalf, bottom);
+  ctx.lineTo(cx - forkHalf, forkY);
+  ctx.lineTo(cx + forkHalf, forkY);
+  ctx.lineTo(cx + baseHalf, bottom);
+  ctx.closePath();
+  ctx.fillStyle = road;
+  ctx.fill();
+  // Vạch làn trên đường chính
+  const laneCount = Math.max(2, Math.min(5, info.lanes ? info.lanes.length : 2));
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([5, 5]);
+  for (let i = 1; i < laneCount; i++) {
+    const f = i / laneCount * 2 - 1;
+    ctx.beginPath();
+    ctx.moveTo(cx + f * baseHalf, bottom);
+    ctx.lineTo(cx + f * forkHalf, forkY);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.lineWidth = 1.6;
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(cx + side * baseHalf * 0.96, bottom);
+    ctx.lineTo(cx + side * forkHalf * 0.96, forkY);
+    ctx.stroke();
+  }
+  // Mũi tên vàng: chạy trên các làn nên đi (hoặc giữa đường), tới ngã thì theo lối sẽ đi
+  if (info.choose != null) {
+    let fromF = 0;
+    if (info.lanes && info.lanes.some(l => l.on)) {
+      const on = info.lanes.map((l, i) => l.on ? i : -1).filter(i => i >= 0);
+      fromF = ((on[0] + on[on.length - 1]) / 2 + 0.5) / info.lanes.length * 2 - 1;
+    }
+    const pts = [[cx + fromF * baseHalf * 0.8, bottom], [cx + fromF * forkHalf, forkY + 4]];
+    for (const t of [0.35, 0.7]) pts.push(exitPoint(info.choose, t));
+    const [ax, ay] = pts[pts.length - 2], [bx, by] = pts[pts.length - 1];
+    const ang = Math.atan2(by - ay, bx - ax);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const [color, width] of [['rgba(0,0,0,0.35)', 13], ['#ffd21f', 9]]) {
+      ctx.strokeStyle = ctx.fillStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py));
+      ctx.stroke();
+      const hl = width * 1.1;
+      ctx.beginPath();
+      ctx.moveTo(bx + Math.cos(ang) * hl, by + Math.sin(ang) * hl);
+      ctx.lineTo(bx + Math.cos(ang + 2.2) * hl, by + Math.sin(ang + 2.2) * hl);
+      ctx.lineTo(bx + Math.cos(ang - 2.2) * hl, by + Math.sin(ang - 2.2) * hl);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 let junctionDrawn = '';
-function drawJunction(exits) {
-  const key = exits.map(a => Math.round(a / 5)).join();
+function drawJunction(info) {
+  const key = JSON.stringify(info, (k, v) => typeof v === 'number' ? Math.round(v / 5) : v);
   if (key === junctionDrawn) return;
   junctionDrawn = key;
+  // Không có dữ liệu làn thì mỗi lối một ô; đang dẫn đường thì tô xanh lối sẽ đi
+  const lanes = info.lanes && info.lanes.length ? info.lanes : info.exits.map(turn => ({
+    turns: [turn], on: info.choose == null ? null : Math.abs(angleDelta(turn, info.choose)) < 10
+  }));
   const canvas = document.getElementById('junction');
-  const cssWidth = exits.length * JUNCTION_CELL + 8;
-  canvas.width = cssWidth * 2;     // vẽ gấp đôi cho nét, canvas này không phải canvas của lớp video
-  canvas.height = 80;
-  canvas.style.width = cssWidth + 'px';
+  const h = JUNCTION_LANE_H + JUNCTION_PIC_H + 6;
+  canvas.width = JUNCTION_W * 2;     // vẽ gấp đôi cho nét, canvas này không phải canvas của lớp video
+  canvas.height = h * 2;
+  canvas.style.width = JUNCTION_W + 'px';
+  canvas.style.height = h + 'px';
   const ctx = canvas.getContext('2d');
   ctx.scale(2, 2);
   ctx.beginPath();
-  ctx.roundRect(1, 1, cssWidth - 2, 38, 7);
+  ctx.roundRect(1, 1, JUNCTION_W - 2, h - 2, 9);
   ctx.fillStyle = '#10151c';
   ctx.fill();
   ctx.lineWidth = 2;
   ctx.strokeStyle = '#1e8fff';
   ctx.stroke();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  exits.forEach((turn, i) => {
-    const x = 4 + JUNCTION_CELL * (i + 0.5), rad = turn * Math.PI / 180;
-    if (i) {
-      ctx.save();
-      ctx.setLineDash([2, 3]);
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-      ctx.beginPath();
-      ctx.moveTo(4 + JUNCTION_CELL * i, 7);
-      ctx.lineTo(4 + JUNCTION_CELL * i, 33);
-      ctx.stroke();
-      ctx.restore();
-    }
-    // Thân đi lên từ dưới, tới giữa thì bẻ theo góc của lối đi; đầu mũi tên ở cuối
-    const midY = 24, tipX = x + Math.sin(rad) * 12, tipY = midY - Math.cos(rad) * 12;
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(x, 33);
-    ctx.lineTo(x, midY);
-    ctx.lineTo(tipX, tipY);
-    ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    for (const [side, back] of [[0, -3], [6, 6], [-6, 6]]) {
-      ctx.lineTo(tipX + Math.sin(rad) * -back + Math.cos(rad) * side, tipY + Math.cos(rad) * back + Math.sin(rad) * side);
-    }
-    ctx.closePath();
-    ctx.fill();
-  });
+  drawLaneRow(ctx, 6, 2, JUNCTION_W - 12, JUNCTION_LANE_H - 2, lanes, JUNCTION_LANE_CELL);
+  drawJunctionPicture(ctx, 4, JUNCTION_LANE_H + 2, JUNCTION_W - 8, JUNCTION_PIC_H, { ...info, lanes });
+  drawLaneMini(lanes);
 }
+
+// Ô làn nhỏ cạnh mũi tên xe, như Vietmap. laneMiniMarker khai báo cạnh navArrow.
+function drawLaneMini(lanes) {
+  const canvas = document.getElementById('lane-mini');
+  const w = lanes.length * LANE_MINI_CELL + 8, h = 34;
+  canvas.width = w * 2;
+  canvas.height = h * 2;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+  ctx.beginPath();
+  ctx.roundRect(1, 1, w - 2, h - 2, 6);
+  ctx.fillStyle = 'rgba(16,21,28,0.92)';
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#fff';
+  ctx.stroke();
+  drawLaneRow(ctx, 4, 2, w - 8, h - 4, lanes, LANE_MINI_CELL);
+}
+function showLaneGuide(info) {
+  const show = !!info;
+  document.getElementById('junction').classList.toggle('hidden', !show);
+  document.getElementById('lane-mini').classList.toggle('hidden', !show);
+  if (show) drawJunction(info);
+  if (show && map && !laneMiniMarker && carPos) {
+    laneMiniMarker = new maplibregl.Marker({ element: document.getElementById('lane-mini'), anchor: 'left', offset: [34, 0] })
+      .setLngLat([carPos.lon, carPos.lat]).addTo(map);
+  }
+}
+
+/* ---------- Khung hướng dẫn ở góc trên bên trái (kiểu Vietmap Live) ----------
+   Đang dẫn đường: mũi tên rẽ và khoảng cách thật to, tên đường, dòng "Sau đó" báo bước rẽ kế tiếp.
+   Chưa dẫn đường: đường sắp cắt qua, nhỏ hơn. Vẽ vào canvas #cross-road theo màu bản đồ. */
+let guide = null;   // { angle, dist, name, then: { angle, dist } | null, nav }
+const GUIDE_NAV_H = 64, GUIDE_THEN_H = 32, GUIDE_FREE_W = 190, GUIDE_FREE_H = 56;
+
+function guideColors() {
+  return mapThemeName === 'day'
+    ? { bg: '#ffffff', text: '#15191e', sub: '#3c4652', arrow: '#15191e', line: 'rgba(0,0,0,0.12)', then: '#f1f3f6' }
+    : { bg: 'rgba(14,17,22,0.94)', text: '#ffffff', sub: '#c9d1db', arrow: '#4d9bff', line: 'rgba(255,255,255,0.12)', then: 'rgba(30,36,44,0.96)' };
+}
+// Mũi tên rẽ: thân đi lên, tới giữa thì bẻ theo góc rẽ, đầu mũi tên ở cuối
+function drawTurnArrow(ctx, x, y, size, angle, color) {
+  const rad = Math.max(-160, Math.min(160, angle)) * Math.PI / 180;
+  const bottom = y + size * 0.5, mid = y + (angle ? 0.05 : -0.05) * size, arm = size * 0.42;
+  const tipX = x + Math.sin(rad) * arm, tipY = mid - Math.cos(rad) * arm;
+  ctx.strokeStyle = ctx.fillStyle = color;
+  ctx.lineWidth = size * 0.16;
+  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x, bottom);
+  ctx.lineTo(x, mid);
+  ctx.lineTo(tipX - Math.sin(rad) * size * 0.12, tipY + Math.cos(rad) * size * 0.12);
+  ctx.stroke();
+  const head = size * 0.24;
+  ctx.beginPath();
+  for (const [side, back] of [[0, -head * 0.55], [head, head * 0.75], [-head, head * 0.75]]) {
+    ctx.lineTo(tipX + Math.sin(rad) * -back + Math.cos(rad) * side, tipY + Math.cos(rad) * back + Math.sin(rad) * side);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+function fitText(ctx, text, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  while (text.length > 1 && ctx.measureText(text + '…').width > maxW) text = text.slice(0, -1);
+  return text + '…';
+}
+function drawGuideCard() {
+  const canvas = document.getElementById('cross-road');
+  const junction = document.getElementById('junction');
+  canvas.classList.toggle('hidden', !guide);
+  if (!guide) {
+    junction.style.top = '10px';
+    return;
+  }
+  const c = guideColors();
+  const paneW = document.getElementById('map-pane').clientWidth || 400;
+  const nav = guide.nav;
+  const w = nav ? Math.max(200, Math.min(340, paneW - 140)) : GUIDE_FREE_W;
+  const mainH = nav ? GUIDE_NAV_H : GUIDE_FREE_H;
+  const thenW = nav && guide.then ? Math.min(w, 190) : 0;
+  const h = mainH + (thenW ? GUIDE_THEN_H : 0);
+  canvas.width = w * 2;
+  canvas.height = (h + 6) * 2;   // chừa chỗ cho bóng
+  canvas.style.width = w + 'px';
+  canvas.style.height = (h + 6) + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+  ctx.save();
+  if (mapThemeName === 'day') {
+    ctx.shadowColor = 'rgba(0,0,0,0.25)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 2;
+  }
+  ctx.fillStyle = c.then;
+  if (thenW) {
+    ctx.beginPath();
+    ctx.roundRect(0, mainH - 12, thenW, GUIDE_THEN_H + 12, 12);
+    ctx.fill();
+  }
+  ctx.fillStyle = c.bg;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, w, mainH, 12);
+  ctx.fill();
+  ctx.restore();
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  const arrowSize = nav ? 44 : 34;
+  drawTurnArrow(ctx, nav ? 30 : 24, mainH / 2, arrowSize, guide.angle, c.arrow);
+  const textX = nav ? 60 : 48;
+  if (nav) {
+    // "200 m" thật to, tên đường cùng dòng, cắt bớt nếu dài
+    const m = /^([\d,.]+)\s*(\D*)$/.exec(guide.dist);
+    ctx.fillStyle = c.text;
+    let x = textX;
+    if (m) {
+      ctx.font = '800 34px Arial, sans-serif';
+      ctx.fillText(m[1], x, mainH / 2 + 1);
+      x += ctx.measureText(m[1]).width + 2;
+      ctx.font = '700 20px Arial, sans-serif';
+      ctx.fillText(m[2], x, mainH / 2 + 5);
+      x += ctx.measureText(m[2]).width + 10;
+    } else {
+      ctx.font = '800 26px Arial, sans-serif';
+      ctx.fillText(guide.dist, x, mainH / 2 + 1);
+      x += ctx.measureText(guide.dist).width + 10;
+    }
+    ctx.font = '600 19px Arial, sans-serif';
+    ctx.fillStyle = c.sub;
+    if (w - 12 - x > 30) ctx.fillText(fitText(ctx, guide.name, w - 12 - x), x, mainH / 2 + 3);
+    if (thenW) {
+      ctx.font = '600 16px Arial, sans-serif';
+      ctx.fillStyle = c.text;
+      const label = 'Sau đó (' + guide.then.dist + ')';
+      ctx.fillText(label, 12, mainH + GUIDE_THEN_H / 2 - 1);
+      drawTurnArrow(ctx, 12 + ctx.measureText(label).width + 16, mainH + GUIDE_THEN_H / 2 - 1, 22, guide.then.angle, '#1a73e8');
+    }
+  } else {
+    ctx.fillStyle = c.text;
+    ctx.font = '800 22px Arial, sans-serif';
+    ctx.fillText(guide.dist, textX, 19);
+    ctx.font = '600 15px Arial, sans-serif';
+    ctx.fillStyle = c.sub;
+    ctx.fillText(fitText(ctx, guide.name, w - textX - 8), textX, 41);
+  }
+  junction.style.top = (10 + h + 6) + 'px';
+}
+window.addEventListener('resize', () => drawGuideCard());
 
 function updateCrossRoad(match) {
   if (navActive) return;   // đang dẫn đường thì khung này báo hướng rẽ
   const cross = match ? nextCrossRoad(match) : null;
-  document.getElementById('cross-road').classList.toggle('hidden', !cross);
+  guide = cross ? { angle: 0, dist: Math.round(cross.dist / 10) * 10 + ' m', name: cross.name, then: null, nav: false } : null;
+  drawGuideCard();
   const showJunction = !!cross && cross.dist <= JUNCTION_WARN_M && cross.exits.length >= JUNCTION_MIN_EXITS;
-  document.getElementById('junction').classList.toggle('hidden', !showJunction);
-  if (showJunction) drawJunction(cross.exits);
-  if (!cross) return;
-  document.getElementById('cross-road-dist').textContent = Math.round(cross.dist / 10) * 10 + ' m';
-  document.getElementById('cross-road-name').textContent = cross.name;
+  // Chưa dẫn đường: chưa biết sẽ đi lối nào, dữ liệu đường cũng không có làn nên mỗi lối một ô trắng
+  showLaneGuide(showJunction ? { lanes: null, exits: cross.exits, choose: null } : null);
 }
 
 let lastMatch = null;
@@ -1883,7 +2300,8 @@ async function loadSpeedTile(key) {
 }
 
 // Giới hạn của đoạn gần xe nhất và cùng hướng với xe. Chưa biết hướng thì chỉ nhận đoạn có hai chiều như nhau.
-function matchSpeedLimit(lat, lon, heading) {
+// maxAngle: bỏ đoạn lệch hướng hơn chừng này độ (dùng khi xét phía trước, tránh lấy nhầm đường cắt ngang)
+function matchSpeedLimit(lat, lon, heading, maxAngle) {
   const cosLat = Math.cos(lat * Math.PI / 180);
   const seen = new Set();
   let best = null;
@@ -1906,6 +2324,7 @@ function matchSpeedLimit(lat, lon, heading) {
         if (heading != null) {
           const diff = Math.abs(angleDelta((Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360, heading));
           if (diff > 90) limit = seg[5];
+          if (maxAngle != null && Math.min(diff, 180 - diff) > maxAngle) continue;
           score += Math.min(diff, 180 - diff) * 0.5;
         } else if (seg[4] !== seg[5]) {
           continue;
@@ -1954,6 +2373,32 @@ function renderSigns() {
   source.setData({ type: 'FeatureCollection', features: Array.from(signTiles.values()).flat() });
 }
 if (map) map.on('load', renderSigns);
+
+// Đổi bộ màu bản đồ và khung hướng dẫn. Tự động thì xét lại mỗi phút theo giờ mặt trời ở chỗ xe.
+function applyMapTheme(force) {
+  const name = currentThemeName(carPos);
+  document.getElementById('map-pane').classList.toggle('day', name === 'day');
+  if (name === mapThemeName && !force) return;
+  mapThemeName = name;
+  const t = MAP_THEMES[name];
+  const paints = [
+    ['background', 'background-color', t.background], ['park', 'fill-color', t.park], ['water', 'fill-color', t.water],
+    ['road-edge', 'line-color', t.roadEdge], ['road', 'line-color', ['case', isMainRoad, t.roadMain, t.roadMinor]],
+    ['nav-route-edge', 'line-color', t.routeEdge], ['nav-route', 'line-color', t.route],
+    ['road-name', 'text-color', ['case', isMainRoad, t.roadTextMain, t.roadText]], ['road-name', 'text-halo-color', t.halo],
+    ['fuel', 'text-color', t.fuelText], ['fuel', 'text-halo-color', t.halo],
+    ['search-place', 'text-color', t.pinText], ['search-place', 'text-halo-color', t.halo],
+    ['place-name', 'text-color', t.placeText], ['place-name', 'text-halo-color', t.halo]
+  ];
+  try {
+    for (const [layer, prop, value] of paints) map.setPaintProperty(layer, prop, value);
+  } catch (e) {}
+  drawGuideCard();
+  drawNextLimitBar(nextLimitShown);
+}
+if (map) map.on('load', () => applyMapTheme(true));
+setInterval(() => applyMapTheme(false), 60000);
+document.getElementById('map-pane').classList.toggle('day', mapThemeName === 'day');
 if (map) map.on('load', applyMapShow);
 
 // Ẩn/hiện lớp và từng loại biển theo Cài đặt
@@ -1985,7 +2430,8 @@ async function loadSignTile(key) {
       ...tile.b.map(([lat, lon, type, heading]) => point(lat, lon, { icon: 'sb-' + type, heading, isCamera: false })),
       // Camera có giới hạn tốc độ: icon kèm con số, ví dụ sc-3-60
       ...tile.c.map(([lat, lon, type, limit]) => point(lat, lon, {
-        icon: 'sc-' + type + (limit ? '-' + limit : ''), name: signTypes.cams[type][1], isCamera: true
+        icon: 'sc-' + type + (limit ? '-' + limit : ''), name: signTypes.cams[type][1], isCamera: true,
+        key: lat / 1e5 + ',' + lon / 1e5   // trùng với key của nearestCameraAhead
       }))
     ]);
     const near = lastPoint ? tilesNear(lastPoint.lat, lastPoint.lon) : [];
@@ -2088,6 +2534,62 @@ function drawSignIcon(ctx, id) {
     ctx.fill();
   }
 }
+// Biểu tượng camera sắp tới, giống Vietmap Live: chấm đỏ ở giữa ảnh (đúng chỗ camera),
+// đường đỏ nối lên vòng tròn trắng có biểu tượng camera ở phía trên bên phải.
+const CALLOUT_PX = 280;   // vẽ gấp đôi, hiện 140 px
+function drawCamCallout(ctx, icon) {
+  const c = CALLOUT_PX / 2, bx = 216, by = 62, r = 58;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#e53935';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(c, c);
+  ctx.lineTo(bx - r * 0.7, by + r * 0.7);
+  ctx.stroke();
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.35)';
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(bx, by, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  if (icon.indexOf('limit-') === 0) {
+    // Biển giới hạn tốc độ: vòng đỏ, số đen
+    ctx.lineWidth = 11;
+    ctx.strokeStyle = '#e11d2e';
+    ctx.beginPath();
+    ctx.arc(bx, by, r - 7, 0, Math.PI * 2);
+    ctx.stroke();
+    const text = icon.slice(6);
+    ctx.fillStyle = '#222';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '800 ' + (text.length > 2 ? 34 : 44) + 'px Arial, sans-serif';
+    ctx.fillText(text, bx, by + 2);
+  } else {
+    ctx.save();
+    ctx.translate(bx - 54, by - 54);
+    ctx.scale(108 / SIGN_ICON_PX, 108 / SIGN_ICON_PX);
+    drawSignIcon(ctx, icon);
+    ctx.restore();
+  }
+  ctx.fillStyle = '#e53935';
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(c, c, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+}
+if (map) map.on('styleimagemissing', function (e) {
+  if (e.id.indexOf('callout|') !== 0) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = CALLOUT_PX;
+  const ctx = canvas.getContext('2d');
+  drawCamCallout(ctx, e.id.slice(8));
+  map.addImage(e.id, ctx.getImageData(0, 0, CALLOUT_PX, CALLOUT_PX), { pixelRatio: 2 });
+});
 if (map) map.on('styleimagemissing', function (e) {
   if (!/^(sign|sb|sc)-/.test(e.id)) return;
   const canvas = document.createElement('canvas');
@@ -2098,30 +2600,152 @@ if (map) map.on('styleimagemissing', function (e) {
 });
 
 /* ---------- Cảnh báo sắp tới camera ----------
-   Lấy camera gần nhất nằm trên hướng xe đang chạy. Chưa biết hướng xe thì tính mọi phía. */
-function nearestCameraAhead(lat, lon, heading) {
+   Lấy camera gần nhất nằm trên con đường xe đang chạy, phía trước (xem aheadOnRoad).
+   Chưa khớp được đường thì lấy camera nằm trên hướng xe; chưa biết hướng xe thì tính mọi phía. */
+function nearestCameraAhead(lat, lon, heading, ahead) {
   let best = null;
+  const found = [];   // mọi camera phía trước trong CAM_WARN_M, để chỉ hiện các camera này trên bản đồ
   for (const features of signTiles.values()) {
     for (const f of features) {
       if (!f.properties.isCamera) continue;
       const [camLon, camLat] = f.geometry.coordinates;
-      const dist = distanceM(lat, lon, camLat, camLon);
-      if (dist > CAM_WARN_M || (best && dist >= best.dist)) continue;
-      if (heading != null) {
+      let dist = distanceM(lat, lon, camLat, camLon);
+      if (dist > CAM_WARN_M) continue;
+      if (ahead) {
+        dist = aheadDistance(ahead, camLat, camLon, CAM_WARN_M);
+        if (dist == null) continue;
+      }
+      if (!ahead && heading != null) {
         const off = angleDelta(heading, bearingDeg(lat, lon, camLat, camLon)) * Math.PI / 180;
         if (Math.cos(off) <= 0 || dist * Math.abs(Math.sin(off)) > CAM_WARN_SIDE_M) continue;
       }
-      best = { dist, icon: f.properties.icon, key: camLat + ',' + camLon };
+      const key = camLat + ',' + camLon;
+      found.push(key);
+      if (best && dist >= best.dist) continue;
+      best = { dist, icon: f.properties.icon, key, lat: camLat, lon: camLon };
     }
   }
+  if (best) best.others = found.filter(k => k !== best.key);
   return best;
 }
 
+// Bản đồ chỉ hiện camera phía trước, gần xe: camera gần nhất đổi thành chấm đỏ + biểu tượng lớn,
+// các camera khác trong CAM_WARN_M phía trước hiện biểu tượng nhỏ. Còn lại thì ẩn.
+let camCalloutKey = null;
+function showCamCallout(cam) {
+  const key = cam ? cam.key + '|' + cam.icon + '|' + cam.others.join(';') : null;
+  const source = map && map.getSource('cam-active');
+  if (!source || key === camCalloutKey) return;
+  camCalloutKey = key;
+  source.setData(cam
+    ? { type: 'Feature', properties: { icon: cam.icon }, geometry: { type: 'Point', coordinates: [cam.lon, cam.lat] } }
+    : { type: 'FeatureCollection', features: [] });
+  try {
+    map.setFilter('camera', ['in', ['get', 'key'], ['literal', cam ? cam.others : []]]);
+  } catch (e) {}
+}
+
+/* ---------- Giới hạn tốc độ tiếp theo ----------
+   Đi dọc con đường đang chạy (roadAhead), cứ NEXT_LIMIT_STEP_M lại xem giới hạn ở đó (data/speed).
+   Chỗ đầu tiên giới hạn khác chỗ xe, giữ nguyên 2 lần xét liền (tránh nhầm đường cắt ngang), là chỗ đổi giới hạn. */
+const NEXT_LIMIT_M = 600;      // xét trước chừng này, hiện biển tốc độ trên bản đồ
+const NEXT_LIMIT_BAR_M = 300;  // còn cách chừng này thì hiện thanh "Tốc độ giới hạn tiếp theo"
+const NEXT_LIMIT_STEP_M = 10;
+function findNextLimit(lat, lon, heading, match) {
+  if (!match || heading == null) return null;
+  const current = matchSpeedLimit(lat, lon, heading) || speedLimit;
+  const path = roadAhead(match, NEXT_LIMIT_M);
+  let walked = 0, candidate = null;
+  for (let i = 0; i + 1 < path.length; i++) {
+    const [aLat, aLon] = path[i], [bLat, bLon] = path[i + 1];
+    const len = distanceM(aLat, aLon, bLat, bLon);
+    if (!len) continue;
+    const bearing = bearingDeg(aLat, aLon, bLat, bLon);
+    for (let d = Math.max(0, Math.ceil(walked / NEXT_LIMIT_STEP_M) * NEXT_LIMIT_STEP_M - walked); d < len; d += NEXT_LIMIT_STEP_M) {
+      const at = walked + d;
+      if (at > NEXT_LIMIT_M) return null;
+      if (at < 15) continue;
+      const pLat = aLat + (bLat - aLat) * d / len, pLon = aLon + (bLon - aLon) * d / len;
+      const limit = matchSpeedLimit(pLat, pLon, bearing, 30);
+      if (!limit || limit === current) { candidate = null; continue; }
+      if (candidate && candidate.limit === limit) return candidate;
+      candidate = { limit, dist: at, lat: pLat, lon: pLon };
+    }
+    walked += len;
+  }
+  return null;
+}
+
+let nextLimitKey = null;
+function updateNextLimit(lat, lon, heading) {
+  const next = findNextLimit(lat, lon, heading, lastMatch);
+  // Biển trên bản đồ: đổi khi chỗ đổi giới hạn khác đi (cách nhau trên 20 m) hoặc số khác
+  const source = map && map.getSource('limit-next');
+  const key = next ? next.limit + '@' + Math.round(next.lat * 5000) + ',' + Math.round(next.lon * 5000) : null;
+  if (source && key !== nextLimitKey) {
+    nextLimitKey = key;
+    source.setData(next
+      ? { type: 'Feature', properties: { limit: next.limit }, geometry: { type: 'Point', coordinates: [next.lon, next.lat] } }
+      : { type: 'FeatureCollection', features: [] });
+  }
+  drawNextLimitBar(next && next.dist <= NEXT_LIMIT_BAR_M ? next : null);
+}
+
+// Thanh dưới cùng: (50) Tốc độ giới hạn tiếp theo ....... 68 m
+let nextLimitShown = null;   // để vẽ lại khi đổi màu bản đồ
+function drawNextLimitBar(next) {
+  nextLimitShown = next;
+  const canvas = document.getElementById('next-limit');
+  canvas.classList.toggle('hidden', !next);
+  document.getElementById('map-pane').classList.toggle('next-limit', !!next);
+  if (!next) return;
+  const day = mapThemeName === 'day';
+  const w = Math.max(180, (document.getElementById('map-pane').clientWidth || 400) - 54 - 52), h = 40;
+  canvas.width = w * 2;
+  canvas.height = h * 2;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+  ctx.beginPath();
+  ctx.roundRect(0, 0, w, h, 12);
+  ctx.fillStyle = day ? '#ffffff' : 'rgba(14,17,22,0.94)';
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = day ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)';
+  ctx.stroke();
+  // Biển nhỏ
+  ctx.beginPath();
+  ctx.arc(22, h / 2, 14, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = '#e11d2e';
+  ctx.stroke();
+  ctx.fillStyle = '#222';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '800 ' + (next.limit > 99 ? 11 : 13) + 'px Arial, sans-serif';
+  ctx.fillText(next.limit, 22, h / 2 + 1);
+  // Khoảng cách bên phải, chữ bên trái
+  const dist = Math.round(next.dist / 10) * 10 + ' m';
+  ctx.textAlign = 'right';
+  ctx.font = '800 20px Arial, sans-serif';
+  ctx.fillStyle = day ? '#15191e' : '#ffffff';
+  ctx.fillText(dist, w - 12, h / 2 + 1);
+  const distW = ctx.measureText(dist).width;
+  ctx.textAlign = 'left';
+  ctx.font = '600 16px Arial, sans-serif';
+  ctx.fillStyle = day ? '#3c4652' : '#c9d1db';
+  ctx.fillText(fitText(ctx, 'Tốc độ giới hạn tiếp theo', w - 44 - distW - 22), 44, h / 2 + 1);
+}
+
 let camWarningIcon = null;
-function updateCameraWarning(lat, lon, heading) {
+function updateCameraWarning(lat, lon, heading, ahead) {
   const box = document.getElementById('cam-warning');
-  const cam = nearestCameraAhead(lat, lon, heading);
+  const cam = nearestCameraAhead(lat, lon, heading, ahead);
   box.classList.toggle('hidden', !cam);
+  showCamCallout(cam);
   if (!cam) return;
   if (!voiceSaid.has(cam.key)) {
     voiceSaid.add(cam.key);
@@ -2423,21 +3047,48 @@ function setRouteLine(coordinates) {
   if (source) source.setData(coordinates ? { type: 'Feature', geometry: { type: 'LineString', coordinates } } : { type: 'FeatureCollection', features: [] });
 }
 
-function showGuidance(angle, dist, name) {
-  const box = document.getElementById('cross-road');
-  box.dataset.angle = angle;
-  // Thu nhỏ khi xoay để mũi tên nằm ngang không chạm chữ
-  box.querySelector('svg').style.transform = angle ? 'rotate(' + angle + 'deg) scale(0.85)' : '';
-  box.classList.remove('hidden');
-  document.getElementById('junction').classList.add('hidden');
-  document.getElementById('cross-road-dist').textContent = dist;
-  document.getElementById('cross-road-name').textContent = name;
+// then: bước rẽ kế tiếp { angle, dist } để hiện dòng "Sau đó", null nếu còn xa
+function showGuidance(angle, dist, name, then) {
+  guide = { angle, dist, name, then: then || null, nav: true };
+  drawGuideCard();
 }
 function resetGuidance() {
-  const box = document.getElementById('cross-road');
-  box.dataset.angle = 0;
-  box.querySelector('svg').style.transform = '';
-  box.classList.add('hidden');
+  guide = null;
+  drawGuideCard();
+  showLaneGuide(null);
+}
+
+// Làn đường và các lối ở bước rẽ kế tiếp, lấy từ OSRM (có làn khi OpenStreetMap ghi turn:lanes ở đó)
+const NAV_LANE_M = 500;
+const NAV_THEN_M = 2000;   // bước rẽ kế tiếp cách bước này không quá chừng này thì hiện dòng "Sau đó"   // hiện khung làn khi còn cách bước rẽ chừng này
+const LANE_TURNS = {
+  straight: 0, none: 0, 'slight left': -35, left: -90, 'sharp left': -135,
+  'slight right': 35, right: 90, 'sharp right': 135, uturn: -180, 'merge to left': -20, 'merge to right': 20
+};
+function stepLaneInfo(step) {
+  const m = step.maneuver;
+  if (m.type === 'arrive' || m.bearing_before == null || m.bearing_after == null) return null;
+  const rel = b => ((b - m.bearing_before + 540) % 360) - 180;
+  const inter = step.intersections && step.intersections[0];
+  let choose = rel(m.bearing_after);
+  // Đoạn đầu sau ngã có khi rất ngắn, lệch hẳn với hướng rẽ OSRM báo: khi đó tin hướng rẽ
+  const modAngle = NAV_TURN_ANGLES[m.modifier];
+  if (modAngle != null && Math.abs(angleDelta(choose, modAngle)) > 60) choose = modAngle;
+  const exits = [];
+  if (inter && inter.bearings) {
+    inter.bearings.forEach((b, i) => {
+      if (i === inter.in || (inter.entry && !inter.entry[i])) return;
+      const a = rel(b);
+      if (Math.abs(a) <= JUNCTION_BACK_ANGLE) exits.push(a);
+    });
+  }
+  if (!exits.some(a => Math.abs(angleDelta(a, choose)) < 10)) exits.push(choose);
+  exits.sort((a, b) => a - b);
+  const lanes = inter && inter.lanes && inter.lanes.length
+    ? inter.lanes.map(l => ({ turns: l.indications.map(t => LANE_TURNS[t] ?? 0), on: !!l.valid }))
+    : null;
+  if (!lanes && exits.length < 2) return null;
+  return { lanes, exits, choose };
 }
 
 // Bỏ các bước không cần làm gì: đi thẳng mà chỉ đổi tên đường, ra khỏi vòng xoay
@@ -2570,7 +3221,13 @@ function updateNav(lat, lon, heading) {
   const next = steps.find(step => step.atM > best.along) || steps[steps.length - 1];
   const modifier = next.maneuver.modifier;
   const angle = next.maneuver.type === 'arrive' ? 0 : (NAV_TURN_ANGLES[modifier] || 0);
-  showGuidance(angle, formatDistance(Math.max(0, next.atM - best.along)), stepLabel(next));
+  // Bước rẽ ngay sau bước này: báo trước nếu hai bước gần nhau, như "Sau đó (1,0 km) ↱"
+  const following = steps[steps.indexOf(next) + 1];
+  const then = following && following.atM - next.atM <= NAV_THEN_M
+    ? { angle: following.maneuver.type === 'arrive' ? 0 : (NAV_TURN_ANGLES[following.maneuver.modifier] || 0), dist: formatDistance(following.atM - next.atM) }
+    : null;
+  showGuidance(angle, formatDistance(Math.max(0, next.atM - best.along)), stepLabel(next), then);
+  showLaneGuide(next.atM - best.along <= NAV_LANE_M ? stepLaneInfo(next) : null);
   voiceTurn(next, next.atM - best.along);
   renderNavBar(Math.max(0, total - best.along));
 }
@@ -2649,8 +3306,9 @@ function startNav() {
   setPlaceDetail(false);
   document.getElementById('map-pane').classList.add('nav');
   document.getElementById('nav-bar').classList.remove('hidden');
-  document.getElementById('cross-road').classList.add('hidden');
-  document.getElementById('junction').classList.add('hidden');
+  guide = null;
+  drawGuideCard();
+  showLaneGuide(null);
   renderNavBar();
   goToCar();
   if (lastPoint) {
@@ -2726,8 +3384,6 @@ document.getElementById('place-search-bar').addEventListener('submit', function 
 function lookupSpeedLimit(lat, lon, heading) {
   lastPoint = { lat, lon, heading };
   updateNav(lat, lon, heading);
-  updateCameraWarning(lat, lon, heading);
-  voiceSignsAhead(lat, lon, heading);
   for (const key of tilesNear(lat, lon)) {
     if (signTiles.has(key) || Date.now() < (signRetryAt.get(key) || 0)) continue;
     loadSignTile(key);
@@ -2742,6 +3398,11 @@ function lookupSpeedLimit(lat, lon, heading) {
     loadTile(key);
   }
   updateLimitFromRoads(lat, lon, heading);
+  // Camera, biển báo: dựa vào đường vừa khớp ở trên
+  const ahead = heading != null ? aheadOnRoad(lastMatch) : null;   // chưa biết hướng thì chưa biết phía trước
+  updateCameraWarning(lat, lon, heading, ahead);
+  voiceSignsAhead(lat, lon, heading, ahead);
+  updateNextLimit(lat, lon, heading);
 }
 
 // estimated = số ước tính theo loại đường: chỉ hiện để tham khảo, không cảnh báo
@@ -2815,9 +3476,21 @@ function closeAudio() {
   audioCtx = null;
 }
 
+// latencyHint 'playback': bộ đệm lớn. Mặc định ('interactive') iPhone hạ bộ đệm âm thanh của cả trang
+// xuống rất nhỏ, nên lúc đang đọc chỉ cần bản đồ vẽ nặng là thiếu mẫu: giọng đọc rè giật, nhạc video giật theo.
+// Cùng tần số với lúc giải mã câu đọc để khỏi phải đổi tần số khi phát.
+const AUDIO_RATE = 48000;
 function ensureAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (!audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    try {
+      audioCtx = new Ctx({ latencyHint: 'playback', sampleRate: AUDIO_RATE });
+    } catch (e) {
+      audioCtx = new Ctx();
+    }
+  }
+  if (audioCtx.state === 'suspended') return audioCtx.resume().catch(() => {});
+  return Promise.resolve();
 }
 function beep() {
   try {
@@ -2853,7 +3526,7 @@ function loadClip(name) {
       .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
       .then(data => new Promise((done, fail) => {
         // Giải mã bằng một context riêng không phát tiếng, vì AudioContext để phát bị đóng sau mỗi lần đọc
-        if (!voiceDecoder) voiceDecoder = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100);
+        if (!voiceDecoder) voiceDecoder = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, AUDIO_RATE);
         voiceDecoder.decodeAudioData(data, done, fail);
       }))
       .catch(() => { voiceClips.delete(key); return null; }));
@@ -2861,21 +3534,31 @@ function loadClip(name) {
   return voiceClips.get(key);
 }
 
-function playClip(buffer) {
-  return new Promise(done => {
-    try {
-      ensureAudio();
-      const source = audioCtx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(audioCtx.destination);
+const VOICE_LEAD_S = 0.08;   // chờ loa sẵn sàng rồi mới phát, để không mất hay giật tiếng đầu câu
+const VOICE_FADE_S = 0.01;   // vào ra tiếng thật nhẹ để không có tiếng tách ở đầu và cuối câu
+async function playClip(buffer) {
+  try {
+    keepAudio(buffer.duration * 1000 + 1500);
+    await ensureAudio();   // phát lúc context còn đang mở lại thì đầu câu bị vấp
+    if (!audioCtx) return;
+    const ctx = audioCtx;
+    const t = ctx.currentTime + VOICE_LEAD_S;
+    const end = t + buffer.duration;
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    source.buffer = buffer;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(1, t + VOICE_FADE_S);
+    gain.gain.setValueAtTime(1, end - VOICE_FADE_S);
+    gain.gain.linearRampToValueAtTime(0, end);
+    source.connect(gain).connect(ctx.destination);
+    await new Promise(done => {
       source.onended = done;
-      source.start();
-      keepAudio(buffer.duration * 1000 + 1000);
-      setTimeout(done, buffer.duration * 1000 + 300);   // phòng khi không có sự kiện onended
-    } catch (e) {
-      done();
-    }
-  });
+      source.start(t);
+      keepAudio(buffer.duration * 1000 + 1500);
+      setTimeout(done, (VOICE_LEAD_S + buffer.duration) * 1000 + 300);   // phòng khi không có sự kiện onended
+    });
+  } catch (e) {}
 }
 
 // Đọc lần lượt các câu, nối sau câu đang đọc. force: đọc cả khi đã tắt tiếng (nghe thử trong cài đặt)
@@ -2887,10 +3570,31 @@ function say(names, force) {
   voiceChain = voiceChain.then(async () => {
     for (const clip of clips) {
       const buffer = await clip;
-      if (buffer) await playClip(buffer);
+      if (!buffer) continue;
+      muteVideoForVoice(true);
+      await playClip(buffer);
     }
-  }).catch(() => {}).then(() => { voiceWaiting--; });
+  }).catch(() => {}).then(() => {
+    voiceWaiting--;
+    if (voiceWaiting === 0) muteVideoForVoice(false);   // đọc hết các câu đang chờ mới bật lại tiếng
+  });
   return true;
+}
+
+// Tắt tiếng video lúc đang đọc, đọc xong bật lại. Chỉ bật lại khi chính chỗ này đã tắt,
+// để video người dùng tự tắt tiếng thì vẫn giữ tắt.
+let voiceMutedVideo = false;
+function muteVideoForVoice(mute) {
+  const v = document.getElementById('video');
+  if (!v) return;
+  if (mute) {
+    if (voiceMutedVideo || v.muted || v.paused) return;
+    v.muted = true;
+    voiceMutedVideo = true;
+  } else if (voiceMutedVideo) {
+    voiceMutedVideo = false;
+    v.muted = false;
+  }
 }
 
 // Camera làn xe buýt, đèn đỏ: camera_traffic; camera tốc độ: camera_speed, kèm giới hạn nếu có
@@ -2914,7 +3618,7 @@ function voiceSpeedLimit(limit) {
 }
 
 // Biển hầm, cấm vượt, hết cấm vượt phía trước, cùng chiều xe đang chạy
-function voiceSignsAhead(lat, lon, heading) {
+function voiceSignsAhead(lat, lon, heading, ahead) {
   if (heading == null || !signTypes) return;
   for (const features of signTiles.values()) {
     for (const f of features) {
@@ -2927,8 +3631,12 @@ function voiceSignsAhead(lat, lon, heading) {
       const dist = distanceM(lat, lon, signLat, signLon);
       if (dist > VOICE_SIGN_M) continue;
       if (Math.abs(angleDelta(heading, f.properties.heading)) > VOICE_SIGN_ANGLE) continue;
-      const off = angleDelta(heading, bearingDeg(lat, lon, signLat, signLon)) * Math.PI / 180;
-      if (Math.cos(off) <= 0 || dist * Math.abs(Math.sin(off)) > VOICE_SIGN_SIDE_M) continue;
+      if (ahead) {
+        if (aheadDistance(ahead, signLat, signLon, VOICE_SIGN_M) == null) continue;
+      } else {
+        const off = angleDelta(heading, bearingDeg(lat, lon, signLat, signLon)) * Math.PI / 180;
+        if (Math.cos(off) <= 0 || dist * Math.abs(Math.sin(off)) > VOICE_SIGN_SIDE_M) continue;
+      }
       voiceSaid.add(key);
       if (alertOn(clip === 'vao_duong_ham' ? 'tunnel' : 'overtaking')) say(clip);
     }
@@ -2978,7 +3686,27 @@ function renderVoiceList() {
     : 'Tiếng đang tắt nên khi chạy trang không đọc và không kêu bíp. Bấm một giọng vẫn nghe thử được.';
 }
 // Bảng Cài đặt: trang chính là danh sách mục, bấm một mục thì mở trang của mục đó
-const SETTINGS_TITLES = { 'settings-main': 'Cài đặt', 'settings-speed': 'Tốc độ', 'settings-voice': 'Giọng nói', 'settings-alerts': 'Tùy chỉnh cảnh báo', 'settings-map': 'Biển báo trên bản đồ' };
+const SETTINGS_TITLES = { 'settings-main': 'Cài đặt', 'settings-speed': 'Tốc độ', 'settings-voice': 'Giọng nói', 'settings-alerts': 'Tùy chỉnh cảnh báo', 'settings-map': 'Biển báo trên bản đồ', 'settings-theme': 'Màu bản đồ' };
+function renderThemeList() {
+  const list = document.getElementById('theme-list');
+  list.innerHTML = '';
+  for (const item of MAP_THEME_OPTIONS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'voice-item' + (mapThemePref === item.id ? ' on' : '');
+    b.innerHTML = '<i></i><span></span>';
+    b.querySelector('span').textContent = item.label + (item.note ? ' · ' + item.note : '');
+    b.addEventListener('click', () => {
+      mapThemePref = item.id;
+      try { localStorage.setItem(MAP_THEME_KEY, item.id); } catch (e) {}
+      applyMapTheme(false);
+      renderSettings();
+    });
+    list.appendChild(b);
+  }
+  document.getElementById('theme-note').textContent = 'Bây giờ đang dùng màu ' + (mapThemeName === 'day' ? 'sáng' : 'tối') + '.' +
+    (mapThemePref === 'auto' ? ' Giờ mặt trời mọc, lặn tính theo vị trí xe; chưa có GPS thì tính ở giữa Việt Nam.' : '');
+}
 function saveMapShow() {
   try { localStorage.setItem(MAP_SHOW_KEY, JSON.stringify(mapShow)); } catch (e) {}
   applyMapShow();
@@ -3065,6 +3793,9 @@ function offsetLabel(value) {
 }
 function renderSettings() {
   renderVoiceList();
+  renderThemeList();
+  document.getElementById('theme-summary').textContent = MAP_THEME_OPTIONS.find(o => o.id === mapThemePref).label +
+    ' · đang ' + (mapThemeName === 'day' ? 'sáng' : 'tối');
   renderAlertList();
   renderMapShow();
   const shown = MAP_SHOW_LAYERS.filter(l => !mapShow.off.includes(l.id)).map(l => l.label);
