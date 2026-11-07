@@ -928,7 +928,7 @@ const NAV_MAP_STYLE = {
       layout: {
         'icon-image': ['get', 'icon'],
         'icon-size': ['interpolate', ['linear'], ['zoom'], 15, 0.7, 17, 1, 18, 1.2],
-        'icon-padding': 1,
+        'icon-padding': 4,   // các biển cách nhau một chút, sát quá thì ẩn bớt
         'icon-pitch-alignment': 'viewport',
         'icon-rotation-alignment': 'viewport'
       } },
@@ -938,8 +938,7 @@ const NAV_MAP_STYLE = {
       layout: {
         'icon-image': ['get', 'icon'],
         'icon-size': ['interpolate', ['linear'], ['zoom'], 14, 0.65, 16, 1, 18, 1.25],
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true,
+        'icon-allow-overlap': true,   // camera luôn hiện; biển báo nhỏ ở lớp dưới phải nhường chỗ
         'icon-pitch-alignment': 'viewport',
         'icon-rotation-alignment': 'viewport'
       } },
@@ -947,17 +946,19 @@ const NAV_MAP_STYLE = {
     { id: 'cam-active', type: 'symbol', source: 'cam-active',
       layout: {
         'icon-image': ['concat', 'callout|', ['get', 'icon']],
+        'icon-anchor': 'bottom-left',
+        'icon-offset': [-8, 8],   // chấm đỏ (góc dưới bên trái ảnh) nằm đúng chỗ camera
         'icon-allow-overlap': true,
-        'icon-ignore-placement': true,
         'icon-pitch-alignment': 'viewport',
         'icon-rotation-alignment': 'viewport'
       } },
     // Giới hạn tốc độ tiếp theo: chấm đỏ chỗ đổi giới hạn, nối lên biển tốc độ (xem updateNextLimit)
     { id: 'limit-next', type: 'symbol', source: 'limit-next',
       layout: {
-        'icon-image': ['concat', 'callout|limit-', ['to-string', ['get', 'limit']]],
+        'icon-image': ['concat', 'calloutL|limit-', ['to-string', ['get', 'limit']]],
+        'icon-anchor': 'bottom-right',
+        'icon-offset': [8, 8],    // biển nằm bên trái chấm, không đè biểu tượng camera bên phải
         'icon-allow-overlap': true,
-        'icon-ignore-placement': true,
         'icon-pitch-alignment': 'viewport',
         'icon-rotation-alignment': 'viewport'
       } },
@@ -2534,17 +2535,20 @@ function drawSignIcon(ctx, id) {
     ctx.fill();
   }
 }
-// Biểu tượng camera sắp tới, giống Vietmap Live: chấm đỏ ở giữa ảnh (đúng chỗ camera),
-// đường đỏ nối lên vòng tròn trắng có biểu tượng camera ở phía trên bên phải.
-const CALLOUT_PX = 280;   // vẽ gấp đôi, hiện 140 px
-function drawCamCallout(ctx, icon) {
-  const c = CALLOUT_PX / 2, bx = 216, by = 62, r = 58;
+// Biểu tượng lớn cho camera sắp tới và giới hạn tốc độ tiếp theo, giống Vietmap Live:
+// chấm đỏ ở góc dưới ảnh (đúng chỗ trên đường), đường đỏ nối lên vòng tròn trắng có biểu tượng.
+// left = biển nằm bên trái chấm (giới hạn tốc độ), không thì bên phải (camera), để hai cái không đè nhau.
+// Ảnh vừa khít để ô va chạm nhỏ: biển báo nhỏ chỉ phải nhường đúng chỗ của nó.
+const CALLOUT_W = 180, CALLOUT_H = 150, CALLOUT_DOT = 16;   // vẽ gấp đôi
+function drawCamCallout(ctx, icon, left) {
+  const r = 58, by = 64, bx = left ? r + 6 : CALLOUT_W - r - 6;
+  const dx = left ? CALLOUT_W - CALLOUT_DOT : CALLOUT_DOT, dy = CALLOUT_H - CALLOUT_DOT;
   ctx.lineCap = 'round';
   ctx.strokeStyle = '#e53935';
   ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.moveTo(c, c);
-  ctx.lineTo(bx - r * 0.7, by + r * 0.7);
+  ctx.moveTo(dx, dy);
+  ctx.lineTo(bx + (left ? r : -r) * 0.7, by + r * 0.7);
   ctx.stroke();
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.35)';
@@ -2578,17 +2582,19 @@ function drawCamCallout(ctx, icon) {
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.arc(c, c, 10, 0, Math.PI * 2);
+  ctx.arc(dx, dy, 10, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 }
 if (map) map.on('styleimagemissing', function (e) {
-  if (e.id.indexOf('callout|') !== 0) return;
+  const m = /^callout(L?)\|(.+)$/.exec(e.id);
+  if (!m) return;
   const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = CALLOUT_PX;
+  canvas.width = CALLOUT_W;
+  canvas.height = CALLOUT_H;
   const ctx = canvas.getContext('2d');
-  drawCamCallout(ctx, e.id.slice(8));
-  map.addImage(e.id, ctx.getImageData(0, 0, CALLOUT_PX, CALLOUT_PX), { pixelRatio: 2 });
+  drawCamCallout(ctx, m[2], m[1] === 'L');
+  map.addImage(e.id, ctx.getImageData(0, 0, CALLOUT_W, CALLOUT_H), { pixelRatio: 2 });
 });
 if (map) map.on('styleimagemissing', function (e) {
   if (!/^(sign|sb|sc)-/.test(e.id)) return;
