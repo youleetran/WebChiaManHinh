@@ -62,10 +62,11 @@ Dữ liệu © OpenStreetMap, giấy phép ODbL: phải ghi nguồn trên bản 
 - ⚠️ Theo `nguon/README.md`, icon camera và icon tốc độ thuộc bản quyền Vietmap.
 - Bản đồ cũng hiện cây xăng lấy thẳng từ nền bản đồ OpenFreeMap (OpenStreetMap), kèm tên nếu có. Dữ liệu có thể thiếu hoặc cũ, ví dụ cây đã đóng cửa.
 
-- **Cài đặt:** bấm nút ☰ ở góc dưới bên trái. Trang chính có hai mục, bấm vào để mở, bấm ‹ để quay lại:
+- **Cài đặt:** bấm nút ☰ ở góc dưới bên trái. Trang chính có các mục, bấm vào để mở, bấm ‹ để quay lại:
   - **Tốc độ:** chỉnh tốc độ GPS từ −10 tới +10 km/h cho khớp đồng hồ xe (mặc định 0, không chỉnh). Chỉ cộng/trừ khi xe chạy từ 5 km/h trở lên. Số đã chỉnh dùng cho cả ô tốc độ và cảnh báo chạy quá tốc độ. Đồng hồ xe thường chỉ cao hơn tốc độ thật vài km/h, nên chỉnh cộng thêm sẽ cảnh báo sớm hơn.
   - **Giọng nói:** bật/tắt tiếng và chọn giọng, xem dưới.
   - **Tùy chỉnh cảnh báo:** bật/tắt riêng từng loại câu đọc: camera tốc độ, camera giao thông (đèn đỏ, làn xe buýt), camera khác, chạy quá tốc độ, giới hạn tốc độ mới, vào hầm, cấm vượt/hết cấm vượt, hướng rẽ, đi sai đường, tới nơi. Mặc định bật hết. Bật lại một mục thì nghe thử câu đó. Tắt "Chạy quá tốc độ" thì vẫn kêu bíp và vẫn có viền đỏ; tắt các loại camera thì vẫn có khung vàng nhấp nháy. Mọi lựa chọn trong Cài đặt được lưu trong trình duyệt cho lần sau.
+  - **Biển báo trên bản đồ:** ẩn/hiện cả lớp Biển báo, Camera, Cây xăng, và ẩn/hiện riêng từng loại trong 28 loại biển (có icon để nhận ra). Mặc định hiện hết. Chỉ ẩn biểu tượng trên bản đồ: khung vàng báo camera, giọng đọc và cảnh báo tốc độ vẫn chạy như cũ.
 - **Giọng đọc:** trong Cài đặt → Giọng nói, chọn một trong 3 giọng nữ: miền Bắc, miền Trung, miền Nam (mặc định), hoặc tắt giọng chỉ kêu bíp. Bấm một giọng là nghe thử ngay; lựa chọn được lưu trong máy. Giọng đọc báo:
   - camera phía trước trong vòng 500 m (mỗi camera một lần);
   - chạy quá tốc độ, nhắc lại sau 15 giây nếu vẫn còn quá;

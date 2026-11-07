@@ -194,6 +194,8 @@
   .alert-toggle { margin-bottom: 6px; gap: 10px; text-align: left; }
   .alert-toggle span { flex: 1; min-width: 0; }
   .alert-toggle small { display: block; font-size: 12px; color: var(--muted); }
+  .alert-toggle img { flex: none; width: 30px; height: 30px; object-fit: contain; }
+  #sign-type-list.off { opacity: 0.5; }
   #voice-list.off { opacity: 0.5; }
 
   /* Lúc đang dẫn đường: khung rẽ rộng tới sát bảng tốc độ, thanh giờ tới ở dưới */
@@ -527,6 +529,11 @@
             <span class="settings-text"><b>Tùy chỉnh cảnh báo</b><span id="alerts-summary"></span></span>
             <span class="settings-arrow">›</span>
           </button>
+          <button type="button" class="settings-row" data-page="settings-map">
+            <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 3.5l9 15.5H3z"/><path d="M12 10v4" stroke-linecap="round"/><circle cx="12" cy="16.6" r="0.6" fill="currentColor"/></svg></span>
+            <span class="settings-text"><b>Biển báo trên bản đồ</b><span id="map-show-summary"></span></span>
+            <span class="settings-arrow">›</span>
+          </button>
         </div>
       </div>
       <div class="settings-page hidden" id="settings-speed">
@@ -542,6 +549,12 @@
       <div class="settings-page hidden" id="settings-alerts">
         <div class="settings-note" style="margin: 0 4px 8px">Chọn câu nào được đọc. Bật một mục thì nghe thử câu đó.</div>
         <div id="alert-list"></div>
+      </div>
+      <div class="settings-page hidden" id="settings-map">
+        <div class="settings-note" style="margin: 0 4px 8px">Chỉ ẩn hay hiện biểu tượng trên bản đồ. Cảnh báo và giọng đọc vẫn chạy như cũ.</div>
+        <div id="map-show-list"></div>
+        <div class="settings-title">Từng loại biển báo</div>
+        <div id="sign-type-list"></div>
       </div>
       <div class="settings-page hidden" id="settings-voice">
         <button type="button" id="sound-toggle"><span id="sound-toggle-text">Tiếng cảnh báo</span><i></i></button>
@@ -669,6 +682,13 @@ const VOICE_ALERTS = [
   { id: 'arrive', label: 'Tới nơi', sample: 'arriver' }
 ];
 const VOICE_ALERTS_KEY = 'voiceAlertsOff';   // danh sách loại đang tắt
+// Lớp biểu tượng trên bản đồ có thể ẩn trong Cài đặt → Biển báo trên bản đồ
+const MAP_SHOW_LAYERS = [
+  { id: 'sign', label: 'Biển báo', note: 'Ngã tư, đường cong, trường học, cấm vượt…' },
+  { id: 'camera', label: 'Camera', note: 'Ẩn trên bản đồ vẫn có khung vàng và giọng đọc' },
+  { id: 'fuel', label: 'Cây xăng' }
+];
+const MAP_SHOW_KEY = 'mapShow';
 const SPEED_OFFSET_KEY = 'speedOffset';
 const SPEED_OFFSET_RANGE = 10;      // điều chỉnh tốc độ GPS từ -10 tới +10 km/h
 const SPEED_OFFSET_MIN_KMH = 5;     // chỉ cộng/trừ khi xe chạy nhanh hơn chừng này, đứng yên vẫn là 0
@@ -927,6 +947,11 @@ let voiceAlertsOff = new Set();  // loại câu đọc đang tắt, xem VOICE_AL
 try {
   const saved = JSON.parse(localStorage.getItem(VOICE_ALERTS_KEY));
   if (Array.isArray(saved)) voiceAlertsOff = new Set(saved);
+} catch (e) {}
+let mapShow = { off: [], signsOff: [] };  // lớp đang ẩn, mã loại biển đang ẩn
+try {
+  const saved = JSON.parse(localStorage.getItem(MAP_SHOW_KEY));
+  if (saved && Array.isArray(saved.off) && Array.isArray(saved.signsOff)) mapShow = saved;
 } catch (e) {}
 let speedOffset = 0;            // km/h cộng thêm vào tốc độ GPS cho khớp đồng hồ xe
 try {
@@ -1920,6 +1945,7 @@ const signTypesReady = (async function () {
     img.src = SIGN_ICON_URL + file;
   })));
   renderSigns();
+  applyMapShow();
 })();
 
 function renderSigns() {
@@ -1928,6 +1954,22 @@ function renderSigns() {
   source.setData({ type: 'FeatureCollection', features: Array.from(signTiles.values()).flat() });
 }
 if (map) map.on('load', renderSigns);
+if (map) map.on('load', applyMapShow);
+
+// Ẩn/hiện lớp và từng loại biển theo Cài đặt
+function applyMapShow() {
+  // Không dùng isStyleLoaded: nó báo false cả khi chỉ đang tải ô bản đồ
+  try {
+    if (!map || !map.getLayer('sign')) return;
+  } catch (e) {
+    return;   // kiểu bản đồ chưa tạo xong, sự kiện load sẽ gọi lại
+  }
+  for (const layer of MAP_SHOW_LAYERS) {
+    map.setLayoutProperty(layer.id, 'visibility', mapShow.off.includes(layer.id) ? 'none' : 'visible');
+  }
+  const hidden = signTypes ? signTypes.signs.map((t, i) => mapShow.signsOff.includes(t[0]) ? 'sb-' + i : null).filter(Boolean) : [];
+  map.setFilter('sign', ['all', ['!', ['get', 'isCamera']], ['!', ['in', ['get', 'icon'], ['literal', hidden]]]]);
+}
 
 async function loadSignTile(key) {
   signTiles.set(key, []);     // đánh dấu để không tải trùng
@@ -2916,7 +2958,51 @@ function renderVoiceList() {
     : 'Tiếng đang tắt nên khi chạy trang không đọc và không kêu bíp. Bấm một giọng vẫn nghe thử được.';
 }
 // Bảng Cài đặt: trang chính là danh sách mục, bấm một mục thì mở trang của mục đó
-const SETTINGS_TITLES = { 'settings-main': 'Cài đặt', 'settings-speed': 'Tốc độ', 'settings-voice': 'Giọng nói', 'settings-alerts': 'Tùy chỉnh cảnh báo' };
+const SETTINGS_TITLES = { 'settings-main': 'Cài đặt', 'settings-speed': 'Tốc độ', 'settings-voice': 'Giọng nói', 'settings-alerts': 'Tùy chỉnh cảnh báo', 'settings-map': 'Biển báo trên bản đồ' };
+function saveMapShow() {
+  try { localStorage.setItem(MAP_SHOW_KEY, JSON.stringify(mapShow)); } catch (e) {}
+  applyMapShow();
+  renderSettings();
+}
+function toggleIn(list, value) {
+  const i = list.indexOf(value);
+  if (i >= 0) list.splice(i, 1);
+  else list.push(value);
+}
+function switchRow(label, note, on, onClick, iconUrl) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'alert-toggle' + (on ? ' on' : '');
+  b.innerHTML = (iconUrl ? '<img alt="">' : '') + '<span><b></b><small></small></span><i></i>';
+  if (iconUrl) b.querySelector('img').src = iconUrl;
+  b.querySelector('b').textContent = label;
+  b.querySelector('small').textContent = note || '';
+  b.addEventListener('click', onClick);
+  return b;
+}
+function renderMapShow() {
+  const list = document.getElementById('map-show-list');
+  list.innerHTML = '';
+  for (const layer of MAP_SHOW_LAYERS) {
+    list.appendChild(switchRow(layer.label, layer.note, !mapShow.off.includes(layer.id), () => {
+      toggleIn(mapShow.off, layer.id);
+      saveMapShow();
+    }));
+  }
+  const types = document.getElementById('sign-type-list');
+  types.innerHTML = '';
+  types.classList.toggle('off', mapShow.off.includes('sign'));
+  if (!signTypes) {
+    types.textContent = 'Đang tải danh sách biển báo…';
+    return;
+  }
+  for (const [code, name, file] of signTypes.signs) {
+    types.appendChild(switchRow(name, '', !mapShow.signsOff.includes(code), () => {
+      toggleIn(mapShow.signsOff, code);
+      saveMapShow();
+    }, SIGN_ICON_URL + file));
+  }
+}
 function alertOn(id) {
   return !voiceAlertsOff.has(id);
 }
@@ -2960,6 +3046,10 @@ function offsetLabel(value) {
 function renderSettings() {
   renderVoiceList();
   renderAlertList();
+  renderMapShow();
+  const shown = MAP_SHOW_LAYERS.filter(l => !mapShow.off.includes(l.id)).map(l => l.label);
+  document.getElementById('map-show-summary').textContent = (shown.length ? 'Hiện ' + shown.join(', ').toLowerCase() : 'Ẩn hết') +
+    (mapShow.signsOff.length && !mapShow.off.includes('sign') ? ' · ẩn ' + mapShow.signsOff.length + ' loại biển' : '');
   const onCount = VOICE_ALERTS.filter(a => alertOn(a.id)).length;
   document.getElementById('alerts-summary').textContent = onCount === VOICE_ALERTS.length
     ? 'Đọc tất cả ' + onCount + ' loại' : 'Đang đọc ' + onCount + '/' + VOICE_ALERTS.length + ' loại';
