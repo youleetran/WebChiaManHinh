@@ -4190,6 +4190,10 @@ try {
   if (VIDEO_SOURCES.some(o => o.id === saved)) videoSource = saved;
 } catch (e) {}
 let engine = 'invidious';      // trình phát đang dùng cho bài hiện tại
+const DEFAULT_VIDEO = { videoId: 'kziedyAHYPE', title: 'Nhạc Chill Nhẹ Nhàng', author: 'Sola Chill Music' };
+const AUTOPLAY_CHECK_MS = 2500;   // chưa phát được sau chừng này thì phát không tiếng, chạm vào trang là có tiếng
+let userPausedVideo = false;      // bạn tự bấm dừng thì không tự phát lại
+let autoMuted = false;            // trang tự tắt tiếng để được tự phát
 let ytPlayer = null, ytState = -1, ytReady = null;
 
 function loadYouTubeApi() {
@@ -4265,7 +4269,17 @@ async function playYouTube(item, token) {
       width: '100%', height: '100%', videoId,
       playerVars: { autoplay: 1, playsinline: 1, rel: 0, start, origin: location.origin },
       events: {
-        onReady: e => { if (engine === 'youtube') e.target.playVideo(); },
+        onReady: e => {
+          if (engine !== 'youtube') return;
+          e.target.playVideo();
+          // iPhone chặn video có tiếng tự phát khi chưa chạm vào trang: phát không tiếng trước
+          setTimeout(() => {
+            if (engine !== 'youtube' || userPausedVideo || ytState === 1 || ytState === 3) return;
+            autoMuted = true;
+            e.target.mute();
+            e.target.playVideo();
+          }, AUTOPLAY_CHECK_MS);
+        },
         onStateChange: e => {
           ytState = e.data;
           renderPlayButtons();
@@ -4298,6 +4312,7 @@ async function playSong(item, failCounts) {
   const skip = new Set();
   counts.forEach((n, b) => { if (n >= VIDEO_TRIES_PER_SERVER) skip.add(b); });
   stopPlayer();
+  userPausedVideo = false;   // chọn bài mới là muốn nghe
   if (videoSource === 'youtube') return playYouTube(item, token);
   try {
     const { data: s, base } = await invidiousFetch('/api/v1/videos/' + videoId, skip, () => token === playToken);
@@ -4425,8 +4440,8 @@ if ('mediaSession' in navigator) {
   const mediaActions = {
     nexttrack: () => changeTrack(1),
     previoustrack: () => changeTrack(-1),
-    play: () => media.play(),
-    pause: () => media.pause(),
+    play: () => { userPausedVideo = false; media.play(); },
+    pause: () => { userPausedVideo = true; media.pause(); },
     // Để trống thì iPhone hiện nút chuyển bài thay vì nút tua
     seekbackward: null,
     seekforward: null
@@ -4493,14 +4508,24 @@ videoEl.addEventListener('pause', saveState);
 document.getElementById('btn-prev').addEventListener('click', () => changeTrack(-1));
 document.getElementById('btn-next').addEventListener('click', () => changeTrack(1));
 document.getElementById('btn-playpause').addEventListener('click', () => {
+  userPausedVideo = !media.paused;
   if (media.paused) media.play();
   else media.pause();
 });
+// Chạm lần đầu vào bất kỳ đâu trên trang: phát video (nếu iPhone đã chặn tự phát) và bật lại tiếng
+document.addEventListener('pointerdown', function unlockVideo(e) {
+  if (e.target.closest && e.target.closest('#btn-playpause, #btn-mute')) return;
+  try {
+    if (autoMuted && !voiceMutedVideo) { media.muted = false; autoMuted = false; }
+    if (currentVideoId && !userPausedVideo && media.paused) media.play();
+  } catch (err) {}
+}, true);
 document.getElementById('btn-replay').addEventListener('click', () => {
   if (media.hasMedia) media.restart();
 });
 // Tắt tiếng bằng tay: nếu giọng đọc đang tạm tắt tiếng video thì để nó khỏi bật lại
 document.getElementById('btn-mute').addEventListener('click', () => {
+  autoMuted = false;
   if (voiceMutedVideo) {
     voiceMutedVideo = false;
     media.muted = true;
@@ -4637,7 +4662,11 @@ function saveState() {
 function resumeLast() {
   let st = null;
   try { st = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (e) {}
-  if (!st || !st.videoId) return;
+  // Chưa nghe bài nào thì mở sẵn một bài, như duoscreen vào là có video
+  if (!st || !st.videoId) {
+    playSong(DEFAULT_VIDEO);
+    return;
+  }
   pendingResumeTime = st.time || 0;
   const item = {
     videoId: st.videoId,
