@@ -3066,6 +3066,13 @@ function closePlaceSearch() {
   document.getElementById('place-search').classList.add('hidden');
 }
 
+// 652 phút -> "10 giờ 52 phút", dưới một giờ thì chỉ phút
+function formatDuration(seconds) {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  if (!h) return minutes + ' phút';
+  return h + ' giờ' + (m ? ' ' + m + ' phút' : '');
+}
 function formatDistance(m) {
   return m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km';
 }
@@ -3092,7 +3099,7 @@ function renderNavBar(remainM) {
     const seconds = navRoute.duration * remainM / navRoute.total;
     const arrive = new Date(Date.now() + seconds * 1000);
     const clock = String(arrive.getHours()).padStart(2, '0') + ':' + String(arrive.getMinutes()).padStart(2, '0');
-    text = clock + ' · ' + Math.max(1, Math.round(seconds / 60)) + ' phút · ' + formatDistance(remainM);
+    text = clock + ' · ' + formatDuration(seconds) + ' · ' + formatDistance(remainM);
   } else {
     text = navFailed ? 'Chưa có tuyến, đang thử lại' : 'Đang tính tuyến…';
   }
@@ -3104,7 +3111,7 @@ function renderPlaceInfo(message) {
   if (!currentPlace) return;
   const here = lastPoint ? formatDistance(distanceM(lastPoint.lat, lastPoint.lon, currentPlace.lat, currentPlace.lon)) : '';
   let extra = here;
-  if (navRoute) extra = formatDistance(navRoute.total) + ' · ' + Math.max(1, Math.round(navRoute.duration / 60)) + ' phút';
+  if (navRoute) extra = formatDistance(navRoute.total) + ' · ' + formatDuration(navRoute.duration);
   document.getElementById('place-detail-info').textContent = [message || extra, currentPlace.detail].filter(Boolean).join(' · ');
 }
 function renderPlaceLike() {
@@ -4262,6 +4269,25 @@ function pageHidden() { return document.visibilityState === 'hidden'; }
 function systemPaused() {
   return pageHidden() || Date.now() - pageHiddenAt < RESUME_HIDDEN_MS || Date.now() < voiceBusyUntil;
 }
+// Chạm vào trong khung YouTube thì trang mất focus về khung đó (sự kiện blur): coi như bạn đang bấm trong khung
+let lastPlayerTouchAt = 0;
+const PLAYER_TOUCH_MS = 2500;
+window.addEventListener('blur', () => {
+  const el = document.activeElement;
+  if (el && el.id === 'yt-host') lastPlayerTouchAt = Date.now();
+});
+videoEl.addEventListener('pointerdown', () => { lastPlayerTouchAt = Date.now(); });
+function touchedPlayerRecently() { return Date.now() - lastPlayerTouchAt < PLAYER_TOUCH_MS; }
+// Trình phát tự dừng (không phải do nút của trang): bạn vừa bấm trong khung thì giữ dừng, không thì phát lại
+function onPlayerPaused() {
+  if (userPausedVideo || !currentVideoId) return;
+  if (touchedPlayerRecently() && !systemPaused()) {
+    userPausedVideo = true;
+    keepAlive(false);
+  } else {
+    keepPlaying();
+  }
+}
 function keepPlaying() {
   if (userPausedVideo || !currentVideoId) return;
   clearTimeout(resumeTimer);
@@ -4281,12 +4307,13 @@ document.addEventListener('visibilitychange', () => {
   keepPlaying();   // ẩn: phòng khi bị dừng; hiện lại: phát tiếp nếu đang bị dừng
 });
 window.addEventListener('pagehide', () => { pageHiddenAt = Date.now(); });
-// Canh định kỳ lúc màn hình tắt: lỡ bị dừng mà không có sự kiện nào báo
+// Canh định kỳ: lỡ bị dừng mà không có sự kiện nào báo (khóa iPhone, Carvia chạy nền)
 setInterval(() => {
-  if (!pageHidden() || userPausedVideo || !currentVideoId) return;
+  if (userPausedVideo || !currentVideoId || autoMuted && !ytEverPlayed) return;
   try { if (media.paused) media.play(); } catch (e) {}
 }, 2000);
 let ytPlayer = null, ytState = -1, ytReady = null;
+let ytEverPlayed = false;   // khung YouTube đã phát được lần nào chưa (chưa thì iPhone còn chặn tự phát)
 
 function loadYouTubeApi() {
   if (ytReady) return ytReady;
@@ -4384,10 +4411,9 @@ async function playYouTube(item, token) {
           if (e.data === 1 || e.data === 3) { try { e.target.setPlaybackQuality(YT_QUALITY); } catch (err) {} }
           // 2 = dừng, -1/5 = chưa chạy (bài mới nạp lúc màn hình tắt)
           if (engine !== 'youtube') return;
-          if (e.data === 1) { userPausedVideo = false; keepAlive(true); }
-          if ((e.data === 2 || e.data === -1 || e.data === 5) && systemPaused()) keepPlaying();
-          // Dừng lúc màn hình đang sáng là bạn bấm dừng ngay trong khung YouTube
-          else if (e.data === 2) { userPausedVideo = true; keepAlive(false); }
+          if (e.data === 1) { userPausedVideo = false; ytEverPlayed = true; keepAlive(true); }
+          if (e.data === 2) onPlayerPaused();
+          else if ((e.data === -1 || e.data === 5) && ytEverPlayed) keepPlaying();   // bài mới nạp mà chưa chạy
           if (e.data === 0 && engine === 'youtube') { saveState(); changeTrack(1); }
         },
         onError: () => {
@@ -4529,30 +4555,44 @@ function renderNowPlaying(info) {
 
 /* ---------- Nút trên vô lăng, màn hình khóa ----------
    Các nút này do iPhone gửi tới ứng dụng đang phát qua Media Session. */
+let mediaInfo = null;
 function updateMediaSession(info) {
-  if (!('mediaSession' in navigator) || !window.MediaMetadata) return;
-  navigator.mediaSession.metadata = new MediaMetadata({
-    title: info.title || '',
-    artist: info.artist || '',
-    artwork: info.thumb ? [{ src: info.thumb }] : []
-  });
+  mediaInfo = info;
+  syncMediaSession();
 }
-if ('mediaSession' in navigator) {
-  const mediaActions = {
+// Báo iPhone: đang phát bài gì, đang phát hay dừng, các nút điều khiển. Làm lại mỗi MEDIA_SYNC_MS
+// như duoscreen, vì khung YouTube hay đoạn im lặng có thể giành lấy màn hình khóa.
+const MEDIA_SYNC_MS = 1200;
+function syncMediaSession() {
+  if (!('mediaSession' in navigator) || !mediaInfo) return;
+  try {
+    if (window.MediaMetadata) {
+      const art = mediaInfo.thumb ? [512, 256, 128].map(n => ({ src: mediaInfo.thumb, sizes: n + 'x' + n, type: 'image/jpeg' })) : [];
+      navigator.mediaSession.metadata = new MediaMetadata({ title: mediaInfo.title || '', artist: mediaInfo.artist || '', album: 'YouTube', artwork: art });
+    }
+    navigator.mediaSession.playbackState = userPausedVideo ? 'paused' : 'playing';
+    for (const action of Object.keys(mediaActions)) {
+      try { navigator.mediaSession.setActionHandler(action, mediaActions[action]); } catch (e) {}
+    }
+    try { navigator.mediaSession.setActionHandler('seekto', null); } catch (e) {}
+  } catch (e) {}
+}
+setInterval(() => {
+  if (!currentVideoId) return;
+  syncMediaSession();
+  if (!userPausedVideo) keepAlive(true);   // đoạn im lặng bị iPhone dừng thì chạy lại
+}, MEDIA_SYNC_MS);
+const mediaActions = {
     nexttrack: () => changeTrack(1),
     previoustrack: () => changeTrack(-1),
     play: () => { userPausedVideo = false; keepAlive(true); media.play(); },
     pause: () => { userPausedVideo = true; keepAlive(false); media.pause(); },
+    stop: () => { userPausedVideo = true; keepAlive(false); media.pause(); },
     // Để trống thì iPhone hiện nút chuyển bài thay vì nút tua
     seekbackward: null,
     seekforward: null
-  };
-  Object.keys(mediaActions).forEach(action => {
-    try { navigator.mediaSession.setActionHandler(action, mediaActions[action]); } catch (e) {}
-  });
-  videoEl.addEventListener('play', () => { navigator.mediaSession.playbackState = 'playing'; });
-  videoEl.addEventListener('pause', () => { navigator.mediaSession.playbackState = 'paused'; });
-}
+};
+syncMediaSession();
 
 /* ---------- Nửa bên phải: xem video hoặc xem danh sách ---------- */
 let listOpen = false;
@@ -4607,8 +4647,7 @@ videoEl.addEventListener('timeupdate', function () {
 videoEl.addEventListener('pause', saveState);
 videoEl.addEventListener('pause', () => {
   if (engine !== 'invidious' || videoEl.ended || !currentVideoId) return;
-  if (systemPaused()) keepPlaying();
-  else { userPausedVideo = true; keepAlive(false); }   // bấm dừng trên trình phát lúc màn hình sáng
+  onPlayerPaused();
 });
 videoEl.addEventListener('play', () => { if (engine === 'invidious') { userPausedVideo = false; keepAlive(true); } });
 
