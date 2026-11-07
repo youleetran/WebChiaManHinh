@@ -43,7 +43,7 @@ pip install osmium
 python tools/build_roads.py vietnam-latest.osm.pbf data/roads
 ```
 Dữ liệu © OpenStreetMap, giấy phép ODbL: phải ghi nguồn trên bản đồ. Dòng ghi nguồn được thu gọn thành nút ⓘ ở góc dưới bên phải, bấm vào mới hiện chữ; không xóa hẳn nút này.
-- Nút 🔔 và công tắc **Tiếng cảnh báo** trong Cài đặt (nút ☰) cùng bật/tắt mọi tiếng: giọng đọc và tiếng bíp. Tắt thì dừng luôn câu đang đọc. Bấm nút để bật sẽ đọc thử một câu (hoặc kêu bíp nếu đã tắt giọng). Trên iPhone, tiếng có thể không phát khi chưa chạm vào trang lần nào hoặc lúc khóa máy, nên hãy nhìn cả cảnh báo đỏ trên màn hình.
+- Nút 🔔 và công tắc **Tiếng cảnh báo** trong Cài đặt → Giọng nói cùng bật/tắt mọi tiếng: giọng đọc và tiếng bíp. Tắt thì dừng luôn câu đang đọc. Bấm nút để bật sẽ đọc thử một câu (hoặc kêu bíp nếu đã tắt giọng). Trên iPhone, tiếng có thể không phát khi chưa chạm vào trang lần nào hoặc lúc khóa máy, nên hãy nhìn cả cảnh báo đỏ trên màn hình.
 
 ## 5. Bản đồ dẫn đường
 - Khi có GPS, bản đồ tự xoay theo hướng xe chạy, hiện mũi tên xanh ở phía dưới, tên các đường và lối rẽ phía trước. Con đường đang chạy được tô màu xanh ngọc. Khi khớp được đường, mũi tên được đặt lên mặt đường và xoay theo hướng đường để bản đồ không lắc vì nhiễu GPS. Đây chỉ là bản đồ bám vị trí, chưa có chỉ đường theo lộ trình.
@@ -62,7 +62,11 @@ Dữ liệu © OpenStreetMap, giấy phép ODbL: phải ghi nguồn trên bản 
 - ⚠️ Theo `nguon/README.md`, icon camera và icon tốc độ thuộc bản quyền Vietmap.
 - Bản đồ cũng hiện cây xăng lấy thẳng từ nền bản đồ OpenFreeMap (OpenStreetMap), kèm tên nếu có. Dữ liệu có thể thiếu hoặc cũ, ví dụ cây đã đóng cửa.
 
-- **Giọng đọc:** bấm nút ☰ ở góc dưới bên trái để mở Cài đặt và chọn một trong 3 giọng nữ: miền Bắc, miền Trung, miền Nam (mặc định), hoặc tắt giọng chỉ kêu bíp. Bấm một giọng là nghe thử ngay; lựa chọn được lưu trong máy. Giọng đọc báo:
+- **Cài đặt:** bấm nút ☰ ở góc dưới bên trái. Trang chính có hai mục, bấm vào để mở, bấm ‹ để quay lại:
+  - **Tốc độ:** chỉnh tốc độ GPS từ −10 tới +10 km/h cho khớp đồng hồ xe (mặc định 0, không chỉnh). Chỉ cộng/trừ khi xe chạy từ 5 km/h trở lên. Số đã chỉnh dùng cho cả ô tốc độ và cảnh báo chạy quá tốc độ. Đồng hồ xe thường chỉ cao hơn tốc độ thật vài km/h, nên chỉnh cộng thêm sẽ cảnh báo sớm hơn.
+  - **Giọng nói:** bật/tắt tiếng và chọn giọng, xem dưới.
+  - **Tùy chỉnh cảnh báo:** bật/tắt riêng từng loại câu đọc: camera tốc độ, camera giao thông (đèn đỏ, làn xe buýt), camera khác, chạy quá tốc độ, giới hạn tốc độ mới, vào hầm, cấm vượt/hết cấm vượt, hướng rẽ, đi sai đường, tới nơi. Mặc định bật hết. Bật lại một mục thì nghe thử câu đó. Tắt "Chạy quá tốc độ" thì vẫn kêu bíp và vẫn có viền đỏ; tắt các loại camera thì vẫn có khung vàng nhấp nháy. Mọi lựa chọn trong Cài đặt được lưu trong trình duyệt cho lần sau.
+- **Giọng đọc:** trong Cài đặt → Giọng nói, chọn một trong 3 giọng nữ: miền Bắc, miền Trung, miền Nam (mặc định), hoặc tắt giọng chỉ kêu bíp. Bấm một giọng là nghe thử ngay; lựa chọn được lưu trong máy. Giọng đọc báo:
   - camera phía trước trong vòng 500 m (mỗi camera một lần);
   - chạy quá tốc độ, nhắc lại sau 15 giây nếu vẫn còn quá;
   - giới hạn tốc độ mới, sau khi số giữ nguyên 3 lần GPS liền và cách lần đọc trước ít nhất 20 giây, để đường đổi số liên tục không đọc liên tục. Chỉ có câu cho 30, 40, 50, 60, 70, 80, 90, 100, 120 km/h; số khác thì không đọc;
