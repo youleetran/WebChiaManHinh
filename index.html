@@ -4391,13 +4391,22 @@ setInterval(() => {
    Mở màn hình lại thì trả về khung YouTube ở giây đang nghe. */
 let bgMode = false;
 const bgAudioUrls = new Map();   // videoId -> Promise(địa chỉ phần tiếng)
+function audioUrlFromData(videoId, data, base) {
+  const audio = (data.adaptiveFormats || []).filter(f => /^audio\/mp4/.test(f.type))
+    .sort((a, b) => Number(b.bitrate) - Number(a.bitrate));
+  if (!audio.length) throw new Error('không có phần tiếng');
+  return base + '/latest_version?id=' + videoId + '&itag=' + audio[0].itag + '&local=true';
+}
+// Trình phát Invidious đã có sẵn dữ liệu bài: ghi luôn địa chỉ phần tiếng, khỏi hỏi máy chủ lần nữa
+function rememberAudioUrl(videoId, data, base) {
+  try { bgAudioUrls.set(videoId, Promise.resolve(audioUrlFromData(videoId, data, base))); } catch (e) {}
+}
 function audioUrlFor(videoId) {
   if (!bgAudioUrls.has(videoId)) {
+    const started = Date.now();
     const job = invidiousFetch('/api/v1/videos/' + videoId + '?fields=adaptiveFormats').then(({ data, base }) => {
-      const audio = (data.adaptiveFormats || []).filter(f => /^audio\/mp4/.test(f.type))
-        .sort((a, b) => Number(b.bitrate) - Number(a.bitrate));
-      if (!audio.length) throw new Error('không có phần tiếng');
-      return base + '/latest_version?id=' + videoId + '&itag=' + audio[0].itag + '&local=true';
+      logPlay('lấy địa chỉ tiếng nền mất ' + Math.round((Date.now() - started) / 1000) + ' giây');
+      return audioUrlFromData(videoId, data, base);
     });
     job.catch(() => bgAudioUrls.delete(videoId));
     bgAudioUrls.set(videoId, job);
@@ -4417,26 +4426,36 @@ function startBgAudio(url, seconds) {
     if (videoEl.paused) videoEl.play().catch(err => logPlay('hình nền: không chạy được (' + err.name + ')'));
   }
   keepAliveEl.loop = false;
+  bgLastSeconds = seconds;
   keepAliveEl.src = url + '#t=' + Math.max(0, Math.floor(seconds));
   keepAliveEl.play()
     .then(() => logPlay('tiếng nền: phát từ giây ' + Math.floor(seconds)))
-    .catch(err => logPlay('tiếng nền: không phát được (' + err.name + ')'));
+    .catch(err => { if (bgMode) logPlay('tiếng nền: không phát được (' + err.name + ')'); });
 }
-let bgVideoSilenced = false;   // trang đã tắt tiếng video Invidious để thẻ <audio> phát tiếng
+let bgVideoSilenced = false;
+let bgLastSeconds = 0;   // giây đang nghe lúc chuyển sang tiếng nền (phòng khi phần tiếng chưa kịp chạy)   // trang đã tắt tiếng video Invidious để thẻ <audio> phát tiếng
 function enterBackground() {
-  if (bgMode || userPausedVideo || !currentVideoId || !keepAliveEl) return;
+  if (bgMode || userPausedVideo || !currentVideoId || !keepAliveEl) {
+    logPlay('tắt màn hình: không chuyển (' + (bgMode ? 'đang tiếng nền' : userPausedVideo ? 'nhạc đang dừng' : !currentVideoId ? 'chưa có bài' : 'chưa chạm trang lần nào') + ')');
+    return;
+  }
   const id = currentVideoId;
   let seconds = 0;
   try { seconds = media.currentTime; } catch (e) {}
   logPlay('tắt màn hình: chuyển sang tiếng nền');
+  bgLastSeconds = seconds;
   audioUrlFor(id).then(url => {
-    if (!pageHidden() || bgMode || currentVideoId !== id || userPausedVideo) return;
+    const why = !pageHidden() ? 'màn hình đã mở' : bgMode ? 'đang tiếng nền' : currentVideoId !== id ? 'đã đổi bài'
+      : userPausedVideo ? 'đang dừng' : '';
+    if (why) { logPlay('bỏ tiếng nền: ' + why); return; }
     startBgAudio(url, seconds);
   }).catch(e => logPlay('không lấy được tiếng nền: ' + e.message));
 }
 function leaveBackground() {
   if (!bgMode) return;
-  const seconds = keepAliveEl.currentTime || 0;
+  // Phần tiếng chưa chạy được (hoặc đã bị dừng ở đầu) thì đừng kéo về giây 0
+  let seconds = keepAliveEl.currentTime || 0;
+  if (seconds < 1) seconds = engine === 'invidious' ? (videoEl.currentTime || bgLastSeconds) : bgLastSeconds;
   bgMode = false;
   keepAliveEl.loop = true;
   keepAliveEl.src = silentSrc;
@@ -4725,6 +4744,7 @@ function playVideo(s, item, base, failCounts, token) {
       autoSkips = 0;
       clearPlayError();
     }, { once: true });
+    rememberAudioUrl(s.videoId || currentVideoId, s, base);
     if (bgMode) {
       videoEl.muted = true;
       const id = s.videoId || currentVideoId;
@@ -4790,7 +4810,10 @@ const mediaActions = {
     nexttrack: () => changeTrack(1),
     previoustrack: () => changeTrack(-1),
     play: () => { logPlay('màn hình khóa: PHÁT'); userPausedVideo = false; keepAlive(true); media.play(); },
-    pause: () => { logPlay('màn hình khóa: DỪNG'); userPausedVideo = true; keepAlive(false); media.pause(); },
+    pause: () => {
+      logPlay('màn hình khóa: DỪNG (trang ' + (pageHidden() ? 'ẩn' : 'hiện') + (bgMode ? ', đang tiếng nền' : '') + ')');
+      userPausedVideo = true; keepAlive(false); media.pause();
+    },
     stop: () => { logPlay('màn hình khóa: STOP'); userPausedVideo = true; keepAlive(false); media.pause(); },
     // Để trống thì iPhone hiện nút chuyển bài thay vì nút tua
     seekbackward: null,
