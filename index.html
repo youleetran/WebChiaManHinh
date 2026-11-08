@@ -354,6 +354,12 @@
   #now-playing.yt #video, #now-playing:not(.yt) #yt-host { display: none; }
   /* Khung YouTube đã tự hiện tên bài ở trên, không hiện thêm dòng tên của trang cho khỏi đè */
   #now-playing.yt .np-card { display: none; }
+  #touch-hint {
+    position: absolute; z-index: 3; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: 90%;
+    background: rgba(245,158,11,0.95); color: #111; font-size: 14px; font-weight: 700; text-align: center;
+    padding: 6px 12px; border-radius: 10px; pointer-events: none;
+  }
+  #touch-hint.hidden { display: none; }
   #yt-host { aspect-ratio: 16 / 9; }
 
   /* Đang xem video: video chiếm hết chỗ, danh sách ẩn */
@@ -640,6 +646,7 @@
       </div>
       <video id="video" controls playsinline></video>
       <div id="yt-host"></div>
+      <div id="touch-hint" class="hidden">Chạm vào màn hình 1 lần để vẫn nghe nhạc khi tắt màn hình iPhone</div>
     </div>
 
     <div id="result-tabs">
@@ -4313,7 +4320,11 @@ function keepAlive(on) {
       keepAliveEl.setAttribute('x-webkit-airplay', 'deny');
       document.body.appendChild(keepAliveEl);
       keepAliveEl.addEventListener('playing', () => logPlay('im lặng: chạy'));
-      keepAliveEl.addEventListener('pause', () => logPlay('im lặng: bị dừng'));
+      keepAliveEl.addEventListener('pause', () => {
+        logPlay('im lặng: bị dừng');
+        // Màn hình tắt mà không còn tiếng gì thì iPhone đóng băng trang: chạy lại ngay
+        if (pageHidden() && !userPausedVideo && !bgAudible()) keepAliveEl.play().catch(err => logPlay('im lặng: không chạy lại được (' + err.name + ')'));
+      });
     }
     if (keepAliveEl.paused) keepAliveEl.play().catch(err => logPlay('im lặng: không chạy được (' + err.name + ')'));
   } else if (keepAliveEl && !keepAliveEl.paused) {
@@ -4410,11 +4421,27 @@ function audioUrlFor(videoId) {
    khoảng im. Đoạn im lặng (keepAliveEl) vẫn chạy riêng để giữ trang. */
 let shadowEl = null;
 let shadowId = null;           // bài đang nạp trong shadowEl
-let shadowUnlocked = false;    // đã được phát một lần trong lúc bạn chạm (iPhone mới cho bật tiếng về sau)
+let shadowUrl = null;          // địa chỉ phần tiếng của bài đó (lúc mở khóa thẻ tạm phát đoạn im lặng)
+let shadowUnlocked = false;
+let unlockPending = false;    // đã được phát một lần trong lúc bạn chạm (iPhone mới cho bật tiếng về sau)
 let bgVideoSilenced = false;   // trang đã tắt tiếng video Invidious lúc tiếng nền
 let bgLastSeconds = 0;
 const SHADOW_SYNC_S = 1.5;     // lệch quá chừng này giây thì kéo cho khớp
 const SHADOW_ENTER_SYNC_S = 4; // lúc tắt màn hình chỉ tua phần tiếng khi lệch quá chừng này
+// Nhắc chạm vào màn hình một lần: chưa chạm thì tắt màn hình sẽ mất tiếng
+function renderTouchHint() {
+  const el = document.getElementById('touch-hint');
+  if (el) el.classList.toggle('hidden', shadowUnlocked || !currentVideoId);
+}
+setInterval(renderTouchHint, 3000);
+// Trên màn hình cảm ứng, iPhone chỉ tính là "bạn chạm" khi nhấc tay (touchend, click), không phải lúc vừa chạm xuống
+for (const ev of ['touchend', 'click']) {
+  document.addEventListener(ev, () => {
+    if (!currentVideoId) return;
+    if (!userPausedVideo) keepAlive(true);
+    unlockShadow();
+  }, true);
+}
 function bgAudible() { return bgMode && shadowEl && !shadowEl.paused && !shadowEl.muted; }
 function getShadow() {
   if (!shadowEl) {
@@ -4435,11 +4462,11 @@ function getShadow() {
     shadowEl.addEventListener('waiting', () => { if (bgMode && !userPausedVideo) keepAlive(true); });
     shadowEl.addEventListener('pause', () => {
       if (!bgMode || shadowEl.ended) return;
-      logPlay('tiếng nền: bị dừng');
+      logPlay('tiếng nền: bị dừng' + (shadowUnlocked ? '' : ' (chưa chạm trang lần nào)'));
       if (!userPausedVideo) { keepAlive(true); keepPlaying(); }
     });
     shadowEl.addEventListener('ended', () => {
-      if (!bgMode) return;
+      if (!bgMode || shadowEl.src !== shadowUrl) return;   // đoạn im lặng lúc mở khóa hết thì không phải hết bài
       keepAlive(true);
       logPlay('tiếng nền: hết bài');
       saveState();
@@ -4450,20 +4477,29 @@ function getShadow() {
   return shadowEl;
 }
 // Gọi trong lúc bạn chạm: phát đoạn im lặng CÓ TIẾNG một lần để iPhone cho thẻ này bật tiếng về sau
+// Nhật ký lần 5: mở trang (chưa chạm) mà vẫn báo "đã sẵn sàng", rồi tắt màn hình thì iPhone dừng ngay
+// tiếng nền, vì bật tiếng một thẻ chưa từng được bạn chạm cho phát là bị chặn. Nên chỉ mở khóa trong cú chạm thật.
+function inUserGesture() {
+  return !navigator.userActivation || navigator.userActivation.isActive;
+}
 function unlockShadow() {
-  if (shadowUnlocked || !silentSrc) return;
+  if (shadowUnlocked || unlockPending || !silentSrc || !inUserGesture()) return;
+  unlockPending = true;   // một cú chạm có thể báo nhiều sự kiện, chỉ mở khóa một lần
   const el = getShadow();
-  const musicSrc = shadowId ? el.src : null;
+  const musicSrc = shadowId ? shadowUrl : null;
   el.src = silentSrc;
   el.muted = false;
   el.play().then(() => {
     shadowUnlocked = true;
-    logPlay('tiếng nền: đã sẵn sàng');
+    unlockPending = false;
+    logPlay('tiếng nền: đã sẵn sàng (đã chạm)');
+    renderTouchHint();
     el.pause();
     el.muted = true;
     if (musicSrc) { el.src = musicSrc; }
   }).catch(err => {
     el.muted = true;
+    unlockPending = false;
     if (musicSrc) el.src = musicSrc;
     logPlay('tiếng nền: chưa mở được (' + err.name + ')');
   });
@@ -4473,10 +4509,11 @@ function loadShadow(videoId) {
   return audioUrlFor(videoId).then(url => {
     const el = getShadow();
     if (currentVideoId !== videoId) throw new Error('đã đổi bài');
-    if (shadowId !== videoId) {
+    if (shadowId !== videoId || el.src !== url) {
       el.muted = !bgMode;
       el.src = url;
       shadowId = videoId;
+      shadowUrl = url;
     }
     return el;
   });
