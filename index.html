@@ -4415,6 +4415,7 @@ let bgVideoSilenced = false;   // trang đã tắt tiếng video Invidious lúc 
 let bgLastSeconds = 0;
 const SHADOW_SYNC_S = 1.5;     // lệch quá chừng này giây thì kéo cho khớp
 const SHADOW_ENTER_SYNC_S = 4; // lúc tắt màn hình chỉ tua phần tiếng khi lệch quá chừng này
+function bgAudible() { return bgMode && shadowEl && !shadowEl.paused && !shadowEl.muted; }
 function getShadow() {
   if (!shadowEl) {
     shadowEl = document.createElement('audio');
@@ -4423,14 +4424,23 @@ function getShadow() {
     shadowEl.setAttribute('playsinline', '');
     shadowEl.setAttribute('x-webkit-airplay', 'deny');
     document.body.appendChild(shadowEl);
-    shadowEl.addEventListener('playing', () => { if (bgMode) logPlay('tiếng nền: đang phát ở giây ' + Math.floor(shadowEl.currentTime)); });
+    shadowEl.addEventListener('playing', () => {
+      if (!bgMode || shadowEl.muted) return;
+      logPlay('tiếng nền: đang phát ở giây ' + Math.floor(shadowEl.currentTime));
+      // Có tiếng thật rồi: dừng đoạn im lặng, màn hình khóa hiện đúng bài
+      if (keepAliveEl && !keepAliveEl.paused) keepAliveEl.pause();
+      syncMediaSession();
+    });
+    // Tiếng nền ngừng (dừng, chờ tải, hết bài): chạy lại đoạn im lặng ngay, kẻo iPhone đóng băng trang
+    shadowEl.addEventListener('waiting', () => { if (bgMode && !userPausedVideo) keepAlive(true); });
     shadowEl.addEventListener('pause', () => {
       if (!bgMode || shadowEl.ended) return;
       logPlay('tiếng nền: bị dừng');
-      if (!userPausedVideo) keepPlaying();
+      if (!userPausedVideo) { keepAlive(true); keepPlaying(); }
     });
     shadowEl.addEventListener('ended', () => {
       if (!bgMode) return;
+      keepAlive(true);
       logPlay('tiếng nền: hết bài');
       saveState();
       changeTrack(1);
@@ -4504,6 +4514,7 @@ function leaveBackground() {
   if (seconds < 1) seconds = engine === 'invidious' ? (videoEl.currentTime || bgLastSeconds) : bgLastSeconds;
   bgMode = false;
   if (shadowEl) shadowEl.muted = true;   // vẫn chạy không tiếng, sẵn cho lần tắt màn hình sau
+  if (!userPausedVideo) keepAlive(true);
   if (engine === 'invidious') {
     logPlay('mở màn hình: trả tiếng về video ở giây ' + Math.floor(seconds));
     try { if (Math.abs(videoEl.currentTime - seconds) > SHADOW_SYNC_S) videoEl.currentTime = seconds; } catch (e) {}
@@ -4860,12 +4871,29 @@ function syncMediaSession() {
       try { navigator.mediaSession.setActionHandler(action, mediaActions[action]); } catch (e) {}
     }
     try { navigator.mediaSession.setActionHandler('seekto', null); } catch (e) {}
+    // Thời lượng và vị trí của bài, để màn hình khóa không lấy đoạn im lặng 5 giây làm bài đang phát
+    const duration = mediaDuration();
+    if (duration > 0 && navigator.mediaSession.setPositionState) {
+      let position = 0;
+      try { position = media.currentTime; } catch (e) {}
+      navigator.mediaSession.setPositionState({ duration, playbackRate: 1, position: Math.max(0, Math.min(duration, position)) });
+    }
   } catch (e) {}
+}
+function mediaDuration() {
+  try {
+    if (bgMode && shadowEl && isFinite(shadowEl.duration)) return shadowEl.duration;
+    if (engine === 'youtube' && ytPlayer && ytPlayer.getDuration) return ytPlayer.getDuration() || 0;
+    if (isFinite(videoEl.duration)) return videoEl.duration;
+  } catch (e) {}
+  return 0;
 }
 setInterval(() => {
   if (!currentVideoId) return;
   syncMediaSession();
-  if (!userPausedVideo) keepAlive(true);   // đoạn im lặng bị iPhone dừng thì chạy lại
+  // Đoạn im lặng bị iPhone dừng thì chạy lại; trừ lúc tiếng nền đang phát (nó đã giữ trang rồi)
+  if (!userPausedVideo && !bgAudible()) keepAlive(true);
+  else if (bgAudible() && keepAliveEl && !keepAliveEl.paused) keepAliveEl.pause();
 }, MEDIA_SYNC_MS);
 const mediaActions = {
     nexttrack: () => changeTrack(1),
