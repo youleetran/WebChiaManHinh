@@ -125,7 +125,7 @@
   #place-detail-back { left: 10px; font-size: 26px; line-height: 30px; }
   #place-detail-close { right: 10px; }
   /* Lúc xem chi tiết chỉ để lại bản đồ và phần trên */
-  #map-pane.place-detail #speed-overlay, #map-pane.place-detail #cross-road, #map-pane.place-detail #junction,
+  #map-pane.place-detail #speed-overlay, #map-pane.place-detail #cross-road,
   #map-pane.place-detail #cam-warning, #map-pane.place-detail #map-side, #map-pane.place-detail #gps-status,
   #map-pane.place-detail #speed-glow, #map-pane.place-detail .maplibregl-ctrl-bottom-right { display: none; }
 
@@ -273,9 +273,8 @@
   #map-pane.mirror #cross-road { visibility: hidden; }
 
   /* Các hướng đi ở ngã phía trước, ngay dưới tên đường sắp cắt qua */
-  #junction { position: absolute; z-index: 1000; top: 70px; left: 10px; display: block; }
-  #junction.hidden, #lane-mini.hidden { display: none; }
-  #map-pane.mirror #junction, #map-pane.mirror #lane-mini { visibility: hidden; }
+  #lane-mini.hidden { display: none; }
+  #map-pane.mirror #lane-mini { visibility: hidden; }
   #lane-mini { pointer-events: none; }
   @keyframes speed-glow { 50% { opacity: 0.4; } }
 
@@ -469,7 +468,6 @@
 
     <canvas id="cross-road" class="hidden" width="2" height="2"></canvas>
 
-    <canvas id="junction" class="hidden" width="2" height="80"></canvas>
     <canvas id="lane-mini" class="hidden" width="2" height="2"></canvas>
     <canvas id="next-limit" class="hidden" width="2" height="2"></canvas>
 
@@ -1501,9 +1499,6 @@ function drawMirrorOverlay(ctx, width, height) {
   // Khung hướng dẫn, cùng vị trí với #cross-road (đã vẽ sẵn trong canvas)
   const card = document.getElementById('cross-road');
   if (!card.classList.contains('hidden')) ctx.drawImage(card, 10, 10, card.width / 2, card.height / 2);
-  // Các hướng đi ở ngã phía trước, cùng vị trí với #junction
-  const junction = document.getElementById('junction');
-  if (!junction.classList.contains('hidden')) ctx.drawImage(junction, 10, parseFloat(junction.style.top) || 70, junction.width / 2, junction.height / 2);
   // Cảnh báo sắp tới camera, cùng vị trí và nhịp nháy với #cam-warning.
   // Nháy sáng rồi mờ chứ không tắt hẳn: lớp video cập nhật thưa nên có thể lỡ mất lúc sáng.
   if (!document.getElementById('cam-warning').classList.contains('hidden')) {
@@ -1958,11 +1953,7 @@ function nextCrossRoad(match) {
      choose: góc | null   lối sẽ đi khi dẫn đường, vẽ mũi tên vàng
    }
    Góc tính theo độ so với hướng đang chạy: 0 đi thẳng, âm bên trái, dương bên phải.
-   Vẽ hết vào canvas #junction để lớp video lúc khóa máy chỉ cần chép lại. */
-const JUNCTION_W = 176;          // rộng bằng khung #cross-road
-const JUNCTION_LANE_H = 40;
-const JUNCTION_PIC_H = 92;
-const JUNCTION_LANE_CELL = 32;
+   Chỉ còn ô làn nhỏ cạnh mũi tên xe (khung hình ngã to đã bỏ theo yêu cầu). */
 const LANE_MINI_CELL = 22;
 const LANE_ON = '#3d9bff', LANE_OFF = '#6b7682', LANE_PLAIN = '#fff';
 
@@ -2015,107 +2006,6 @@ function drawLaneRow(ctx, x, y, w, h, lanes, cellMax) {
   });
 }
 
-// Hình ngã nhìn từ sau xe: đường chính đi lên, tới chỗ ngã thì tách ra các lối; lối sẽ đi có mũi tên vàng
-function drawJunctionPicture(ctx, x, y, w, h, info) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, 6);
-  ctx.clip();
-  const horizon = y + h * 0.3;
-  let g = ctx.createLinearGradient(0, y, 0, horizon);
-  g.addColorStop(0, '#6f8fae');
-  g.addColorStop(1, '#c9d6e2');
-  ctx.fillStyle = g;
-  ctx.fillRect(x, y, w, horizon - y);
-  g = ctx.createLinearGradient(0, horizon, 0, y + h);
-  g.addColorStop(0, '#7f9a63');
-  g.addColorStop(1, '#55703f');
-  ctx.fillStyle = g;
-  ctx.fillRect(x, horizon, w, y + h - horizon);
-
-  const cx = x + w / 2, forkY = y + h * 0.58, bottom = y + h;
-  const baseHalf = w * 0.3, forkHalf = w * 0.14;
-  // Điểm trên lối ra: t = 0 ở ngã, 1 ở cuối lối
-  const exitPoint = (turn, t) => {
-    const rad = Math.max(-120, Math.min(120, turn)) * Math.PI / 180;
-    return [cx + Math.sin(rad) * w * 0.62 * t, forkY - Math.cos(rad) * (forkY - horizon) * t - Math.abs(Math.sin(rad)) * h * 0.05 * t];
-  };
-  const road = '#5d6268';
-  const exits = info.exits.length ? info.exits : [0];
-  for (const turn of exits) {
-    const rad = Math.max(-120, Math.min(120, turn)) * Math.PI / 180;
-    const [ex, ey] = exitPoint(turn, 1);
-    const endHalf = forkHalf * (0.25 + 0.5 * Math.abs(Math.sin(rad)));
-    const nx = Math.cos(rad), ny = Math.sin(rad);   // vuông góc với lối
-    ctx.beginPath();
-    ctx.moveTo(cx - forkHalf * nx, forkY - forkHalf * ny * 0.4);
-    ctx.lineTo(ex - endHalf * nx, ey - endHalf * ny);
-    ctx.lineTo(ex + endHalf * nx, ey + endHalf * ny);
-    ctx.lineTo(cx + forkHalf * nx, forkY + forkHalf * ny * 0.4);
-    ctx.closePath();
-    ctx.fillStyle = road;
-    ctx.fill();
-  }
-  // Đường chính từ dưới lên tới ngã
-  ctx.beginPath();
-  ctx.moveTo(cx - baseHalf, bottom);
-  ctx.lineTo(cx - forkHalf, forkY);
-  ctx.lineTo(cx + forkHalf, forkY);
-  ctx.lineTo(cx + baseHalf, bottom);
-  ctx.closePath();
-  ctx.fillStyle = road;
-  ctx.fill();
-  // Vạch làn trên đường chính
-  const laneCount = Math.max(2, Math.min(5, info.lanes ? info.lanes.length : 2));
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-  ctx.lineWidth = 1.2;
-  ctx.setLineDash([5, 5]);
-  for (let i = 1; i < laneCount; i++) {
-    const f = i / laneCount * 2 - 1;
-    ctx.beginPath();
-    ctx.moveTo(cx + f * baseHalf, bottom);
-    ctx.lineTo(cx + f * forkHalf, forkY);
-    ctx.stroke();
-  }
-  ctx.setLineDash([]);
-  ctx.lineWidth = 1.6;
-  for (const side of [-1, 1]) {
-    ctx.beginPath();
-    ctx.moveTo(cx + side * baseHalf * 0.96, bottom);
-    ctx.lineTo(cx + side * forkHalf * 0.96, forkY);
-    ctx.stroke();
-  }
-  // Mũi tên vàng: chạy trên các làn nên đi (hoặc giữa đường), tới ngã thì theo lối sẽ đi
-  if (info.choose != null) {
-    let fromF = 0;
-    if (info.lanes && info.lanes.some(l => l.on)) {
-      const on = info.lanes.map((l, i) => l.on ? i : -1).filter(i => i >= 0);
-      fromF = ((on[0] + on[on.length - 1]) / 2 + 0.5) / info.lanes.length * 2 - 1;
-    }
-    const pts = [[cx + fromF * baseHalf * 0.8, bottom], [cx + fromF * forkHalf, forkY + 4]];
-    for (const t of [0.35, 0.7]) pts.push(exitPoint(info.choose, t));
-    const [ax, ay] = pts[pts.length - 2], [bx, by] = pts[pts.length - 1];
-    const ang = Math.atan2(by - ay, bx - ax);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    for (const [color, width] of [['rgba(0,0,0,0.35)', 13], ['#ffd21f', 9]]) {
-      ctx.strokeStyle = ctx.fillStyle = color;
-      ctx.lineWidth = width;
-      ctx.beginPath();
-      pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py));
-      ctx.stroke();
-      const hl = width * 1.1;
-      ctx.beginPath();
-      ctx.moveTo(bx + Math.cos(ang) * hl, by + Math.sin(ang) * hl);
-      ctx.lineTo(bx + Math.cos(ang + 2.2) * hl, by + Math.sin(ang + 2.2) * hl);
-      ctx.lineTo(bx + Math.cos(ang - 2.2) * hl, by + Math.sin(ang - 2.2) * hl);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-  ctx.restore();
-}
-
 let junctionDrawn = '';
 function drawJunction(info) {
   const key = JSON.stringify(info, (k, v) => typeof v === 'number' ? Math.round(v / 5) : v);
@@ -2125,23 +2015,6 @@ function drawJunction(info) {
   const lanes = info.lanes && info.lanes.length ? info.lanes : info.exits.map(turn => ({
     turns: [turn], on: info.choose == null ? null : Math.abs(angleDelta(turn, info.choose)) < 10
   }));
-  const canvas = document.getElementById('junction');
-  const h = JUNCTION_LANE_H + JUNCTION_PIC_H + 6;
-  canvas.width = JUNCTION_W * 2;     // vẽ gấp đôi cho nét, canvas này không phải canvas của lớp video
-  canvas.height = h * 2;
-  canvas.style.width = JUNCTION_W + 'px';
-  canvas.style.height = h + 'px';
-  const ctx = canvas.getContext('2d');
-  ctx.scale(2, 2);
-  ctx.beginPath();
-  ctx.roundRect(1, 1, JUNCTION_W - 2, h - 2, 9);
-  ctx.fillStyle = '#10151c';
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = '#1e8fff';
-  ctx.stroke();
-  drawLaneRow(ctx, 6, 2, JUNCTION_W - 12, JUNCTION_LANE_H - 2, lanes, JUNCTION_LANE_CELL);
-  drawJunctionPicture(ctx, 4, JUNCTION_LANE_H + 2, JUNCTION_W - 8, JUNCTION_PIC_H, { ...info, lanes });
   drawLaneMini(lanes);
 }
 
@@ -2166,7 +2039,6 @@ function drawLaneMini(lanes) {
 }
 function showLaneGuide(info) {
   const show = !!info;
-  document.getElementById('junction').classList.toggle('hidden', !show);
   document.getElementById('lane-mini').classList.toggle('hidden', !show);
   if (show) drawJunction(info);
   if (show && map && !laneMiniMarker && carPos) {
@@ -2215,12 +2087,8 @@ function fitText(ctx, text, maxW) {
 }
 function drawGuideCard() {
   const canvas = document.getElementById('cross-road');
-  const junction = document.getElementById('junction');
   canvas.classList.toggle('hidden', !guide);
-  if (!guide) {
-    junction.style.top = '10px';
-    return;
-  }
+  if (!guide) return;
   const c = guideColors();
   const paneW = document.getElementById('map-pane').clientWidth || 400;
   const nav = guide.nav;
@@ -2292,7 +2160,6 @@ function drawGuideCard() {
     ctx.fillStyle = c.sub;
     ctx.fillText(fitText(ctx, guide.name, w - textX - 10), textX, 48);
   }
-  junction.style.top = (10 + h + 6) + 'px';
 }
 window.addEventListener('resize', () => drawGuideCard());
 
@@ -3549,8 +3416,8 @@ function renderCurrentSpeed(kmh) {
 
 /* ---------- Tiếng "bíp" cảnh báo (không cần file) ---------- */
 let audioCtx = null;
-let soundOn = true;
-try { soundOn = localStorage.getItem('mazda_sound') !== 'off'; } catch (e) {}
+let soundOn = false;   // mặc định tắt loa cảnh báo, bật bằng nút chuông
+try { soundOn = localStorage.getItem('mazda_sound') === 'on'; } catch (e) {}
 
 // Nút chuông và công tắc trong Cài đặt cùng bật/tắt mọi tiếng: giọng đọc và tiếng bíp
 function renderSoundButton() {
