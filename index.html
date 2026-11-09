@@ -397,7 +397,17 @@
   .hint { color: var(--muted); text-align: center; padding: 30px 10px; font-size: 16px; }
   .err { color: #ff9a9a; text-align: center; padding: 20px; font-size: 15px; }
 
-  .head-buttons { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  /* Mọi nút trên một hàng: không xuống dòng, chữ không gãy */
+  .head-buttons { display: flex; gap: 6px; flex-wrap: nowrap; justify-content: flex-end; flex: 0 1 auto; min-width: 0; }
+  #music-pane .head { flex-wrap: nowrap; }
+  #music-pane .head .expand-btn { padding: 8px 9px; font-size: 13px; height: 40px; min-width: 40px; }
+  /* Nửa video hẹp (màn hình xe chia đôi lệch) thì hai nút này chỉ còn biểu tượng, để cả hàng vừa một dòng */
+  #music-pane { container-type: inline-size; }
+  @container (max-width: 460px) {
+    #music-pane .head .expand-btn .label { display: none; }
+    #music-pane .head .expand-btn { font-size: 18px; padding: 0; width: 42px; }
+    .drive-buttons { gap: 6px; }
+  }
 
   .fav {
     flex: 0 0 auto; background: none; border: none; cursor: pointer;
@@ -620,12 +630,11 @@
         <button id="btn-prev" title="Video trước"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="2.6" height="14" rx="1"/><path d="M19 5.8v12.4a1 1 0 0 1-1.55.83L9.2 13.2a1.4 1.4 0 0 1 0-2.4l8.25-5.83A1 1 0 0 1 19 5.8z"/></svg></button>
         <button id="btn-playpause" title="Phát / Tạm dừng"><svg class="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.6v12.8a1.2 1.2 0 0 0 1.8 1.04l10.4-6.4a1.2 1.2 0 0 0 0-2.08L9.8 4.56A1.2 1.2 0 0 0 8 5.6z"/></svg><svg class="i-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1.3"/><rect x="13.5" y="5" width="4" height="14" rx="1.3"/></svg></button>
         <button id="btn-next" title="Video sau"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="16.4" y="5" width="2.6" height="14" rx="1"/><path d="M5 5.8v12.4a1 1 0 0 0 1.55.83l8.25-5.83a1.4 1.4 0 0 0 0-2.4L6.55 4.97A1 1 0 0 0 5 5.8z"/></svg></button>
-        <button id="btn-replay" class="small" title="Phát lại từ đầu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4h4"/></svg></button>
         <button id="btn-mute" class="small" title="Tắt / bật tiếng video"><svg class="i-vol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><svg class="i-mute" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
       </div>
       <div class="head-buttons">
-        <button class="expand-btn" id="btn-list" title="Xem danh sách video">☰ Danh sách</button>
-        <button class="expand-btn" id="btn-expand-music" title="Phóng to video">⛶ Phóng to</button>
+        <button class="expand-btn" id="btn-list" title="Xem danh sách video">☰<span class="label"> Danh sách</span></button>
+        <button class="expand-btn" id="btn-expand-music" title="Phóng to video">⛶<span class="label"> Phóng to</span></button>
       </div>
     </div>
 
@@ -4966,7 +4975,7 @@ function renderRightPane() {
   app.classList.toggle('video-view', hasVideo && !listOpen);
   app.classList.toggle('list-view', hasVideo && listOpen);
   videoEl.controls = !listOpen;
-  document.getElementById('btn-list').textContent = listOpen ? '🎬 Video' : '☰ Danh sách';
+  document.getElementById('btn-list').innerHTML = listOpen ? '🎬<span class="label"> Video</span>' : '☰<span class="label"> Danh sách</span>';
 }
 function setListOpen(open) {
   listOpen = open;
@@ -5035,9 +5044,6 @@ document.addEventListener('pointerdown', function unlockVideo(e) {
     if (currentVideoId && !userPausedVideo && media.paused) media.play();
   } catch (err) {}
 }, true);
-document.getElementById('btn-replay').addEventListener('click', () => {
-  if (media.hasMedia) media.restart();
-});
 // Tắt tiếng bằng tay: nếu giọng đọc đang tạm tắt tiếng video thì để nó khỏi bật lại
 document.getElementById('btn-mute').addEventListener('click', () => {
   autoMuted = false;
@@ -5071,7 +5077,7 @@ function setFocus(pane) {
   const bv = document.getElementById('btn-expand-music');
   bm.textContent = isMap ? '✕' : '⛶';
   bm.title = isMap ? 'Thu nhỏ' : 'Phóng to bản đồ';
-  bv.textContent = isVideo ? '✕ Thu nhỏ' : '⛶ Phóng to';
+  bv.innerHTML = isVideo ? '✕<span class="label"> Thu nhỏ</span>' : '⛶<span class="label"> Phóng to</span>';
   bv.title = isVideo ? 'Thu nhỏ' : 'Phóng to video';
 }
 document.getElementById('btn-expand-map').addEventListener('click', function () {
